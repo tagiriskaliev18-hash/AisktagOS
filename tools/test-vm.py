@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Тестовый стенд AIsktagOS: QEMU с «железом» VMware (SVGA II, vmxnet3, pvscsi) + QMP.
+"""Тестовый стенд: QEMU с «железом» VMware (SVGA II, vmxnet3, pvscsi) + QMP.
 
   vm.py start <name> <bios|uefi|secureboot> <iso> [disk]
   vm.py shot <name> <out.png>
@@ -126,7 +126,10 @@ def main():
             time.sleep(0.4)
     elif cmd == "type":
         text = " ".join(sys.argv[3:])
-        m = {" ": "spc", "-": "minus", ".": "dot", "/": "slash", "_": "shift-minus", "@": "shift-2"}
+        m = {" ": "spc", "-": "minus", ".": "dot", "/": "slash", "_": "shift-minus", "@": "shift-2",
+             ":": "shift-semicolon", ";": "semicolon", "|": "shift-backslash", "=": "equal",
+             "*": "shift-8", ">": "shift-dot", "<": "shift-comma", "'": "apostrophe",
+             '"': "shift-apostrophe", "!": "shift-1", "~": "shift-grave_accent", ",": "comma"}
         for ch in text:
             code = m.get(ch)
             if code is None:
