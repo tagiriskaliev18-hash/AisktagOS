@@ -16,10 +16,10 @@ strings:
     versionedName:       AIsktagOS 1.0
     shortVersionedName:  AIsktagOS 1.0
     bootloaderEntryName: AIsktagOS
-    productUrl:          https://github.com/tagiriskaliev18-hash/multimodel-agent
-    supportUrl:          https://github.com/tagiriskaliev18-hash/multimodel-agent/issues
-    knownIssuesUrl:      https://github.com/tagiriskaliev18-hash/multimodel-agent/issues
-    releaseNotesUrl:     https://github.com/tagiriskaliev18-hash/multimodel-agent/releases
+    productUrl:          https://github.com/tagiriskaliev18-hash/aisktagos
+    supportUrl:          https://github.com/tagiriskaliev18-hash/aisktagos/issues
+    knownIssuesUrl:      https://github.com/tagiriskaliev18-hash/aisktagos/issues
+    releaseNotesUrl:     https://github.com/tagiriskaliev18-hash/aisktagos/releases
 
 images:
     productLogo:         "logo.png"

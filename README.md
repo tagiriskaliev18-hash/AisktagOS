@@ -51,7 +51,7 @@
 
 ## Как скачать
 
-Готовый образ публикуется на странице **[Releases](https://github.com/tagiriskaliev18-hash/multimodel-agent/releases)**. Файл называется `aisktagos-1.0-amd64.iso`.
+Готовый образ публикуется на странице **[Releases](https://github.com/tagiriskaliev18-hash/aisktagos/releases)**. Файл называется `aisktagos-1.0-amd64.iso`.
 
 Если образ больше 2 ГБ, он разбит на части `.part0`, `.part1`. Скачайте все части и запустите `join-windows.bat`: он склеит их в один ISO.
 
@@ -99,23 +99,41 @@ VMware Tools (`open-vm-tools`) уже встроены. Автоматическ
 | Диск | 25 ГБ | 60 ГБ, SSD |
 | Видеокарта | любая (AMD, Intel, NVIDIA; режим «Безопасная графика» для очень старых) | |
 
+## Перенос репозитория на GitHub
+
+Если у вас файл `aisktagos.bundle` (полная история изменений):
+
+1. Создайте на GitHub **пустой** репозиторий `aisktagos`, без README и лицензии.
+2. Выполните в терминале (Windows: Git Bash или PowerShell):
+
+```bash
+git clone aisktagos.bundle aisktagos
+cd aisktagos
+git remote set-url origin https://github.com/tagiriskaliev18-hash/aisktagos.git
+git push -u origin main
+```
+
+После первой отправки GitHub Actions сам соберёт ISO (около 1–1,5 часа) и выложит его на вкладку **Releases**.
+
+Если у вас архив `aisktagos-src.tar.gz`, распакуйте его и выполните `git init`, `git add -A`, `git commit -m "AIsktagOS"`, затем те же `git remote add origin …` и `git push`.
+
 ## Сборка образа самостоятельно
 
 Нужен Ubuntu или Debian с правами root и около 30 ГБ свободного места:
 
 ```bash
 sudo apt install debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools dosfstools
-sudo ./os/build.sh          # полная сборка → os/out/aisktagos-1.0-amd64.iso
-sudo ./os/build.sh iso      # пересобрать только ISO из готовой системы
-sudo ./os/build.sh clean    # удалить рабочие файлы
+sudo ./build.sh             # полная сборка → out/aisktagos-1.0-amd64.iso
+sudo ./build.sh iso         # пересобрать только ISO из готовой системы
+sudo ./build.sh clean       # удалить рабочие файлы
 ```
 
-Сборка на GitHub запускается автоматически при каждом изменении в `os/` (workflow `.github/workflows/build-iso.yml`), а результат публикуется в Releases. Запустить сборку вручную можно так: вкладка **Actions** → «Сборка AIsktagOS ISO» → **Run workflow**.
+Сборка на GitHub запускается автоматически при каждом изменении в репозитории (workflow `.github/workflows/build-iso.yml`), а результат публикуется в Releases. Запустить сборку вручную можно так: вкладка **Actions** → «Сборка AIsktagOS ISO» → **Run workflow**.
 
 ### Устройство репозитория
 
 ```
-os/
+aisktagos/
 ├── config.env                  имя, версия, база Ubuntu, язык по умолчанию
 ├── build.sh                    сборка: debootstrap → пакеты → squashfs → ISO (BIOS+UEFI+Secure Boot)
 ├── packages/*.list             списки пакетов по группам
@@ -126,7 +144,9 @@ os/
 │   ├── etc/xdg/                настройки KDE по умолчанию (тема, шрифты, клавиши)
 │   ├── etc/skel/               настройки нового пользователя (zsh, kitty, VS Code, git)
 │   └── usr/…                   Центр AIsktagOS, тема окон, обои, раскладка рабочего стола
-└── assets/                     генераторы графики (логотип, обои, тема окон)
+├── assets/                     генераторы графики (логотип, обои, тема окон)
+├── tools/test-vm.py            тестовый стенд QEMU с «железом» VMware
+└── AGENTS.md                   передача проекта ИИ-агенту (Claude Code, Antigravity)
 ```
 
-Название, версия и язык системы меняются в `os/config.env`. Графику можно перегенерировать командами `python3 os/assets/make-assets.py` и `python3 os/assets/make-aurorae.py`.
+Название, версия и язык системы меняются в `config.env`. Графику можно перегенерировать командами `python3 assets/make-assets.py` и `python3 assets/make-aurorae.py`.

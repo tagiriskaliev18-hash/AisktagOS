@@ -10,4 +10,4 @@ AIsktagOS — операционная система для разработч�
 
 Контрольная сумма: `sha256sum -c aisktagos-1.0-amd64.iso.sha256`.
 
-Подробная инструкция: [os/README.md](https://github.com/tagiriskaliev18-hash/multimodel-agent/blob/main/os/README.md).
+Подробная инструкция: [README](https://github.com/tagiriskaliev18-hash/aisktagos#readme).
