@@ -93,7 +93,10 @@ python3 tools/test-vm.py sh dbg aisktag              # вход live-польз�
 8. У Kubuntu squashfs слоёный, у нас один слой: casper/calamares удаляет модуль `packages`, остатки live — `post-install.sh`.
 9. `Calamares` на Ubuntu ставит GRUB в `EFI/ubuntu` (так требует подписанный GRUB), поэтому `efiBootloaderId: "ubuntu"`.
 10. **`/dev/pts` в среде установки обязателен**: без него apt падает с «Can not write log (Is /dev/pts mounted?)». В `mount.conf` есть bind `/dev/pts`, а apt в своих командах запускается с `-o Dpkg::Use-Pty=0`.
-11. В песочнице без доступа к packages.mozilla.org вместо Firefox ставится Falkon. На GitHub Actions Firefox ставится нормально.
+11. **Сеть**: без `/etc/netplan/01-network-manager-all.yaml` (renderer: NetworkManager) Ubuntu оставляет проводной адаптер выключенным.
+12. **Локальный .deb через apt 3** падает с «Pathname to install is not absolute» — замена grub-pc→grub-efi-amd64 делается через `dpkg`.
+13. OVMF не грузится с контроллера pvscsi — в тестах подключайте диск через `DISK_BUS=sata`.
+14. В песочнице без доступа к packages.mozilla.org вместо Firefox ставится Falkon. На GitHub Actions Firefox ставится нормально.
 
 ## Что делать дальше (приоритеты)
 
