@@ -6,7 +6,7 @@ export DEBIAN_FRONTEND=noninteractive
 log() { echo "[aisktagos-post] $*"; }
 
 # 1. Убрать остатки live-системы
-apt-get -y autoremove --purge || true
+apt-get -o Dpkg::Use-Pty=0 -y autoremove --purge || true
 rm -f /etc/casper.conf /etc/xdg/autostart/aisktagos-live.desktop /usr/share/applications/aisktagos-install.desktop
 
 # 2. Корневая ФС из fstab (внутри установщика findmnt видит не ту систему)
@@ -55,7 +55,14 @@ if [ ! -d /sys/firmware/efi ] && dpkg -s grub-pc >/dev/null 2>&1; then
     fi
 fi
 
-# 5. Приветствие при первом входе нового пользователя
+# 5. Форматы дат и чисел — на языке системы (установщик берёт их из часового пояса,
+#    и при русском языке в Алматы получались казахские названия месяцев)
+if [ -f /etc/default/locale ]; then
+    lang="$(sed -n 's/^LANG=//p' /etc/default/locale | tr -d '"')"
+    [ -n "$lang" ] && printf 'LANG=%s\n' "$lang" > /etc/default/locale
+fi
+
+# 6. Приветствие при первом входе нового пользователя
 for home in /home/*; do
     [ -d "$home" ] || continue
     rm -f "$home/.config/aisktagos/welcome-done"

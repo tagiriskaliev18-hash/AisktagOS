@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Тестовый стенд AIsktagOS: QEMU с «железом» VMware (SVGA II, vmxnet3, pvscsi) + QMP.
+"""Тестовый стенд: QEMU с «железом» VMware (SVGA II, vmxnet3, pvscsi) + QMP.
 
   vm.py start <name> <bios|uefi|secureboot> <iso> [disk]
   vm.py shot <name> <out.png>
@@ -71,8 +71,12 @@ def start(name, mode, iso, disk=None):
         argv += ["-drive", f"file={iso},media=cdrom,readonly=on,if=none,id=cd0",
                  "-device", "ide-cd,drive=cd0,bootindex=1" if mode == "bios" else "ide-cd,drive=cd0,bootindex=1"]
     if disk:
-        argv += ["-drive", f"file={disk},if=none,id=d0,format=qcow2",
-                 "-device", "scsi-hd,drive=d0,bus=scsi0.0,bootindex=2"]
+        argv += ["-drive", f"file={disk},if=none,id=d0,format=qcow2"]
+        if os.environ.get("DISK_BUS", "pvscsi") == "sata":
+            # OVMF не умеет загружаться с pvscsi; SATA (AHCI) видят все прошивки
+            argv += ["-device", "ahci,id=ahci0", "-device", "ide-hd,drive=d0,bus=ahci0.0,bootindex=2"]
+        else:
+            argv += ["-device", "scsi-hd,drive=d0,bus=scsi0.0,bootindex=2"]
     log = open(f"{BASE}/{name}.log", "w")
     p = subprocess.Popen(argv, stdout=log, stderr=log, start_new_session=True)
     open(f"{BASE}/{name}.pid", "w").write(str(p.pid))
@@ -130,7 +134,10 @@ def main():
             time.sleep(0.4)
     elif cmd == "type":
         text = " ".join(sys.argv[3:])
-        m = {" ": "spc", "-": "minus", ".": "dot", "/": "slash", "_": "shift-minus", "@": "shift-2"}
+        m = {" ": "spc", "-": "minus", ".": "dot", "/": "slash", "_": "shift-minus", "@": "shift-2",
+             ":": "shift-semicolon", ";": "semicolon", "|": "shift-backslash", "=": "equal",
+             "*": "shift-8", ">": "shift-dot", "<": "shift-comma", "'": "apostrophe",
+             '"': "shift-apostrophe", "!": "shift-1", "~": "shift-grave_accent", ",": "comma"}
         for ch in text:
             code = m.get(ch)
             if code is None:

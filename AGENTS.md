@@ -79,7 +79,9 @@ python3 tools/test-vm.py sh dbg aisktag              # вход live-польз�
 - zsh + starship у пользователя, os-release/lsb-release/issue с названием AIsktagOS;
 - запасные режимы графики: X11 без DRM, программная отрисовка без render-узла.
 
-**Не проверено до конца:** завершение установки и первая загрузка установленной системы (под TCG распаковка шла ~1 час). Первым делом проверьте это в VMware или QEMU/KVM: вход в SDDM, Центр AIsktagOS при первом входе, Timeshift (`/etc/timeshift/timeshift.json`), раскладку us+ru на экране входа (установщик мог выставить только ru).
+**Проверено позже (30.09):** полная установка на диск (UEFI) после исправлений /dev/pts и dpkg; загрузка установленной системы через резервный EFI\BOOT\BOOTX64.EFI; вход в SDDM по паролю; автозапуск Центра AIsktagOS; док, строка меню, zsh+starship; fstab с подтомами Btrfs; раскладка us,ru; timeshift.json.
+
+**Осталось проверить:** одна непрерывная установка из свежего ISO со всеми исправлениями (последняя проверка доводилась вручную скриптом с теми же шагами); установка в режиме BIOS; сеть в live-сессии после исправления netplan; Ctrl+Alt+T → kitty; форматы дат на русском.
 
 ## Найденные и исправленные ловушки (не наступите снова)
 
@@ -92,8 +94,13 @@ python3 tools/test-vm.py sh dbg aisktag              # вход live-польз�
 7. Без `touch /etc/.updated /var/.updated` live-система при каждой загрузке запускает долгий `ldconfig.service`.
 8. У Kubuntu squashfs слоёный, у нас один слой: casper/calamares удаляет модуль `packages`, остатки live — `post-install.sh`.
 9. `Calamares` на Ubuntu ставит GRUB в `EFI/ubuntu` (так требует подписанный GRUB), поэтому `efiBootloaderId: "ubuntu"`.
-10. В песочнице без доступа к packages.mozilla.org вместо Firefox ставится Falkon. На GitHub Actions Firefox ставится нормально.
-11. Не переводите базу на 24.04 «noble»: сборка падает на `plasma-session-x11`, `lazygit`, `starship`, `fastfetch`, а в noble Plasma 5.27 — раскладка и установщик рассчитаны на Plasma 6. Раннер GitHub на ubuntu-24.04 это не мешает: `build.sh` сам добавляет debootstrap-скрипт для resolute. Номер `DISTRIB_RELEASE` берётся из os-release базы.
+10. **`/dev/pts` в среде установки обязателен**: без него apt падает с «Can not write log (Is /dev/pts mounted?)». В `mount.conf` есть bind `/dev/pts`, а apt в своих командах запускается с `-o Dpkg::Use-Pty=0`.
+11. **Сеть**: без `/etc/netplan/01-network-manager-all.yaml` (renderer: NetworkManager) Ubuntu оставляет проводной адаптер выключенным.
+12. **Локальный .deb через apt 3** падает с «Pathname to install is not absolute» — замена grub-pc→grub-efi-amd64 делается через `dpkg`.
+13. OVMF не грузится с контроллера pvscsi — в тестах подключайте диск через `DISK_BUS=sata`.
+14. В песочнице без доступа к packages.mozilla.org вместо Firefox ставится Falkon. На GitHub Actions Firefox ставится нормально.
+15. Не переводите базу на 24.04 «noble»: сборка падает на `plasma-session-x11`, `lazygit`, `starship`, `fastfetch`, а в noble Plasma 5.27 — раскладка и установщик рассчитаны на Plasma 6. Раннер GitHub на ubuntu-24.04 это не мешает: `build.sh` сам добавляет debootstrap-скрипт для resolute. Номер `DISTRIB_RELEASE` берётся из os-release базы.
+16. Папка `overlay/etc/xdg/plasma-workspace/env/` (`aisktagos-render.sh`, `aisktagos-live.sh`) однажды не попала в git — проверяйте `git ls-files overlay/etc/xdg/plasma-workspace/env`. Без `aisktagos-live.sh` live-сессия уходит на экран блокировки через ~10 минут.
 
 ## Что делать дальше (приоритеты)
 
