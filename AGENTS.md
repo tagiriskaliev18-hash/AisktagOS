@@ -93,6 +93,7 @@ python3 tools/test-vm.py sh dbg aisktag              # вход live-польз�
 8. У Kubuntu squashfs слоёный, у нас один слой: casper/calamares удаляет модуль `packages`, остатки live — `post-install.sh`.
 9. `Calamares` на Ubuntu ставит GRUB в `EFI/ubuntu` (так требует подписанный GRUB), поэтому `efiBootloaderId: "ubuntu"`.
 10. В песочнице без доступа к packages.mozilla.org вместо Firefox ставится Falkon. На GitHub Actions Firefox ставится нормально.
+11. Не переводите базу на 24.04 «noble»: сборка падает на `plasma-session-x11`, `lazygit`, `starship`, `fastfetch`, а в noble Plasma 5.27 — раскладка и установщик рассчитаны на Plasma 6. Раннер GitHub на ubuntu-24.04 это не мешает: `build.sh` сам добавляет debootstrap-скрипт для resolute. Номер `DISTRIB_RELEASE` берётся из os-release базы.
 
 ## Что делать дальше (приоритеты)
 
