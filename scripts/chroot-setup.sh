@@ -121,7 +121,7 @@ find /usr/share/doc -type d -empty -delete
 
 # --- Файлы AIsktagOS --------------------------------------------------------------
 cp -a "$B/overlay/." /
-chmod +x /usr/bin/aisktag-* /usr/lib/aisktagos/*.sh /usr/lib/aisktagos/*.py 2>/dev/null || true
+chmod +x /usr/bin/aisktag-* /usr/lib/aisktagos/*.sh /usr/lib/aisktagos/*.py /etc/xdg/plasma-workspace/env/*.sh 2>/dev/null || true
 
 # Тёмная тема по умолчанию: цвета Breeze Dark + настройки AIsktagOS
 { cat /usr/share/color-schemes/BreezeDark.colors; echo; cat /usr/share/aisktagos/kdeglobals.aisktagos; } > /etc/xdg/kdeglobals

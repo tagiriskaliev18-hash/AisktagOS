@@ -12,3 +12,7 @@ open-vm-tools-desktop
 spice-vdagent
 qemu-guest-agent
 virtualbox-guest-utils
+virtualbox-guest-x11
+# Драйверы ввода и видео для аппаратной совместимости и X11-fallback
+xserver-xorg-input-all
+xserver-xorg-video-all
