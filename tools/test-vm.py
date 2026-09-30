@@ -38,8 +38,12 @@ def qmp(name, cmd, **args):
 
 def start(name, mode, iso, disk=None):
     os.makedirs(BASE, exist_ok=True)
-    argv = ["qemu-system-x86_64", "-name", name, "-m", "6144", "-smp", "4",
-            "-accel", "tcg,thread=multi", "-cpu", "max",
+    mem = os.environ.get("VM_MEM", "2560")
+    smp = os.environ.get("SMP", "2")
+    accel = os.environ.get("ACCEL", "kvm" if os.path.exists("/dev/kvm") and os.access("/dev/kvm", os.R_OK | os.W_OK) else "tcg,thread=multi")
+    cpu = "host" if "kvm" in accel else "max"
+    argv = ["qemu-system-x86_64", "-name", name, "-m", mem, "-smp", smp,
+            "-accel", accel, "-cpu", cpu,
             "-vga", os.environ.get("VGA", "vmware"),
             "-netdev", "user,id=n0", "-device", "vmxnet3,netdev=n0",
             "-device", "pvscsi,id=scsi0",
