@@ -105,6 +105,7 @@ python3 tools/test-vm.py sh dbg aisktag              # вход live-польз�
 14. В песочнице без доступа к packages.mozilla.org вместо Firefox ставится Falkon. На GitHub Actions Firefox ставится нормально.
 15. Не переводите базу на 24.04 «noble»: сборка падает на `plasma-session-x11`, `lazygit`, `starship`, `fastfetch`, а в noble Plasma 5.27 — раскладка и установщик рассчитаны на Plasma 6. Раннер GitHub на ubuntu-24.04 это не мешает: `build.sh` сам добавляет debootstrap-скрипт для resolute. Номер `DISTRIB_RELEASE` берётся из os-release базы.
 16. Папка `overlay/etc/xdg/plasma-workspace/env/` (`aisktagos-render.sh`, `aisktagos-live.sh`) однажды не попала в git — проверяйте `git ls-files overlay/etc/xdg/plasma-workspace/env`. Без `aisktagos-live.sh` live-сессия уходит на экран блокировки через ~10 минут.
+17. Под QEMU без KVM (TCG) с `-cpu max` kwin_wayland в режиме QPainter периодически падает в AVX-коде `libQt6Gui` (например, при закрытии установщика), а QtWebEngine (Falkon) — с `trace trap`. Это ошибки эмуляции, а не системы: для тестов запускайте `CPU=max,-avx,-avx2,-avx512f,-fma,-f16c python3 tools/test-vm.py start …`. Значки на рабочем столе Plasma 6 открываются одним щелчком.
 
 ## ИИ-ассистент
 

@@ -41,7 +41,8 @@ def start(name, mode, iso, disk=None):
     mem = os.environ.get("VM_MEM", "2560")
     smp = os.environ.get("SMP", "2")
     accel = os.environ.get("ACCEL", "kvm" if os.path.exists("/dev/kvm") and os.access("/dev/kvm", os.R_OK | os.W_OK) else "tcg,thread=multi")
-    cpu = "host" if "kvm" in accel else "max"
+    # CPU=max,-avx,-avx2 — без AVX: под TCG эмуляция AVX может ронять программную отрисовку Qt
+    cpu = os.environ.get("CPU", "host" if "kvm" in accel else "max")
     argv = ["qemu-system-x86_64", "-name", name, "-m", mem, "-smp", smp,
             "-accel", accel, "-cpu", cpu,
             "-vga", os.environ.get("VGA", "vmware"),
