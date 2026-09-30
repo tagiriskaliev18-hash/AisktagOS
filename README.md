@@ -81,6 +81,8 @@ Secure Boot включать и выключать не нужно: загруз
 4. положит на рабочий стол ярлыки **«AIsktagOS VM»** и **«AIsktagOS VM — извлечь ISO»**;
 5. запустит ВМ. В меню загрузки выберите «Установить AIsktagOS».
 
+Нет готового ISO? `tools/windows/Build-AIsktagOS-ISO.bat` соберёт его на вашем компьютере через WSL 2 (40–90 минут) и положит в `%USERPROFILE%\AIsktagOS`, где станция найдёт его сама.
+
 После установки нажмите «извлечь ISO», затем запускайте систему ярлыком «AIsktagOS VM». Пересоздать ВМ: `Install-AIsktagOS-VM.bat -Recreate`.
 
 ## Установка в VMware Workstation / Player
