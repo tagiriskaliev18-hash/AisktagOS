@@ -44,6 +44,7 @@ var dockApps = [
     ["firefox.desktop", "org.mozilla.firefox.desktop", "org.kde.falkon.desktop"],
     ["kitty.desktop", "org.kde.konsole.desktop"],
     ["com.microsoft.VSCode.desktop", "code.desktop", "org.kde.kate.desktop"],
+    ["aisktag-ai.desktop"],
     ["org.kde.discover.desktop"],
     ["aisktag-welcome.desktop"],
     ["systemsettings.desktop"]

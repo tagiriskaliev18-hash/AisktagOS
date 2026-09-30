@@ -49,6 +49,10 @@ DEV_STACKS = [
      "usermod -aG libvirt,kvm \"$(id -nu \"$PKEXEC_UID\")\""),
     ("Claude Code", "ИИ-ассистент для программирования в терминале", "user",
      "npm config set prefix ~/.npm-global && npm install -g @anthropic-ai/claude-code"),
+    ("DeepSeek R1 1.5B", "Модель для ИИ-ассистента: рассуждает перед ответом (~1 ГБ)", "user",
+     "aisktag-ai pull deepseek"),
+    ("Qwen 2.5 Coder 1.5B", "Модель для ИИ-ассистента: помощник программиста (~1 ГБ)", "user",
+     "aisktag-ai pull qwen-coder"),
     ("Ollama", "Локальные нейросети (Llama, Qwen, DeepSeek) без интернета", "root",
      "curl -fsSL https://ollama.com/install.sh | sh"),
     ("LibreOffice", "Офисный пакет (Word/Excel/PowerPoint-совместимый)", "root",
@@ -212,6 +216,8 @@ class WelcomePage(QWidget):
             ("Терминал", "kitty + zsh с подсказками", "kitty", lambda: launch("kitty")),
             ("VS Code", "Редактор кода", "vscode",
              lambda: launch("code")),
+            ("ИИ-ассистент", "Нейросеть на этом ПК: подскажет, как всё устроено", "aisktag-ai",
+             lambda: launch("aisktag-ai")),
         ]
         for i, (t, s, ic, fn) in enumerate(tiles):
             grid.addWidget(tile(t, s, ic, fn), i // 2, i % 2)
@@ -302,7 +308,7 @@ class DevPage(QWidget):
         lay.addWidget(heading("Инструменты разработчика"))
         lay.addWidget(muted(
             "Уже установлено: <b>VS Code, Git, GitHub CLI, Docker, Podman, Distrobox, Python, "
-            "Node.js, rustup, GCC/Clang, CMake, Neovim, lazygit</b>. "
+            "Node.js, rustup, GCC/Clang, CMake, Neovim, lazygit</b> и локальная нейросеть Qwen. "
             "Отметьте, что добавить, и нажмите «Установить»."))
 
         box = QWidget()

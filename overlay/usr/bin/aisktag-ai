@@ -1,0 +1,498 @@
+#!/usr/bin/env python3
+"""ИИ-ассистент AIsktagOS: локальная нейросеть на llama.cpp — без интернета и без облака.
+
+    aisktag-ai               открыть чат в браузере (сервер запускается сам)
+    aisktag-ai chat          чат в терминале
+    aisktag-ai models        какие модели есть и какая выбрана
+    aisktag-ai pull ИМЯ      скачать модель (список — aisktag-ai models)
+    aisktag-ai use ИМЯ       выбрать модель по умолчанию
+    aisktag-ai serve         сервер в этом терминале
+    aisktag-ai stop          остановить сервер
+
+API, совместимый с OpenAI, для своих программ и редакторов: http://127.0.0.1:8484/v1
+"""
+import hashlib
+import http.client
+import json
+import os
+import shutil
+import signal
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import urllib.error
+import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+
+SHARE = Path(os.environ.get("AISKTAG_AI_SHARE", "/usr/share/aisktagos"))
+SYS_DIR = SHARE / "models"
+CATALOG_FILE = SHARE / "ai-models.json"
+KNOWLEDGE_FILE = SHARE / "ai-knowledge.md"
+UI_DIR = SHARE / "ai-chat"
+HOME = Path.home()
+USER_DIR = Path(os.environ.get("XDG_DATA_HOME", HOME / ".local/share")) / "aisktagos/models"
+CONF = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config")) / "aisktagos/ai-model"
+PORT = int(os.environ.get("AISKTAG_AI_PORT", "8484"))
+BACKEND_PORT = PORT + 1          # llama-server слушает только локально, наружу — через этот сервер
+CTX = os.environ.get("AISKTAG_AI_CTX", "8192")
+URL = f"http://127.0.0.1:{PORT}"
+DEFAULT_MODEL = "qwen"
+HF = "https://huggingface.co"
+
+
+# ------------------------------------------------------------------ Каталог --
+def catalog() -> list[dict]:
+    return json.loads(CATALOG_FILE.read_text(encoding="utf-8"))
+
+
+def entry(name: str) -> dict:
+    for m in catalog():
+        if m["name"] == name:
+            return m
+    names = ", ".join(m["name"] for m in catalog())
+    raise SystemExit(f"aisktag-ai: нет модели «{name}». Доступны: {names}")
+
+
+def model_path(name: str) -> Path | None:
+    """Скачанная модель: сначала своя, потом встроенная в систему."""
+    f = entry(name)["file"]
+    for d in (USER_DIR, SYS_DIR):
+        if (d / f).is_file() and (d / f).stat().st_size > 0:
+            return d / f
+    return None
+
+
+def current() -> str:
+    try:
+        name = CONF.read_text().strip()
+        if name and any(m["name"] == name for m in catalog()):
+            return name
+    except OSError:
+        pass
+    return DEFAULT_MODEL
+
+
+def set_current(name: str) -> None:
+    entry(name)
+    CONF.parent.mkdir(parents=True, exist_ok=True)
+    CONF.write_text(name + "\n")
+
+
+def ram_gb() -> float:
+    try:
+        kb = int(Path("/proc/meminfo").read_text().split()[1])
+        return round(kb / 1024 / 1024, 1)
+    except (OSError, ValueError, IndexError):
+        return 0.0
+
+
+# ----------------------------------------------------------------- Загрузка --
+def remote_info(m: dict) -> tuple[str, int]:
+    """SHA256 и размер файла модели по данным HuggingFace."""
+    api = f"{HF}/api/models/{m['repo']}/tree/main"
+    try:
+        r = urllib.request.urlopen(api, timeout=30)
+    except (urllib.error.URLError, OSError) as e:
+        raise RuntimeError("нет связи с huggingface.co — проверьте подключение к интернету") from e
+    with r:
+        for f in json.load(r):
+            if f.get("path") == m["file"] and f.get("lfs"):
+                return f["lfs"]["oid"], int(f["lfs"].get("size") or f.get("size") or 0)
+    raise RuntimeError(f"файл {m['file']} не найден в {m['repo']}")
+
+
+def download(name: str, dest_dir: Path, progress=None) -> Path:
+    """Скачать модель с докачкой и проверкой SHA256. progress(done, total) вызывается по ходу."""
+    m = entry(name)
+    sha, total = remote_info(m)
+    dest = dest_dir / m["file"]
+    part = dest.with_name(dest.name + ".part")
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    if dest.is_file() and dest.stat().st_size == total:
+        return dest
+    have = part.stat().st_size if part.exists() else 0
+    if total - have > shutil.disk_usage(dest_dir).free:
+        raise RuntimeError(f"не хватает места на диске: нужно {total / 1e9:.1f} ГБ")
+
+    for attempt in range(5):
+        have = part.stat().st_size if part.exists() else 0
+        if total and have >= total:
+            break
+        req = urllib.request.Request(f"{HF}/{m['repo']}/resolve/main/{m['file']}",
+                                     headers={"Range": f"bytes={have}-"} if have else {})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                resume = have and r.status == 206
+                done = have if resume else 0
+                with open(part, "ab" if resume else "wb") as out:
+                    while chunk := r.read(1 << 20):
+                        out.write(chunk)
+                        done += len(chunk)
+                        if progress:
+                            progress(done, total)
+            break
+        except (urllib.error.URLError, OSError, http.client.HTTPException):
+            if attempt == 4:
+                raise
+            time.sleep(3)
+
+    h = hashlib.sha256()
+    with open(part, "rb") as f:
+        while chunk := f.read(1 << 22):
+            h.update(chunk)
+    if h.hexdigest() != sha:
+        part.unlink(missing_ok=True)
+        raise RuntimeError("файл повреждён при скачивании, попробуйте ещё раз")
+    part.rename(dest)
+    return dest
+
+
+# ---------------------------------------------------------- Подсказка модели --
+def system_prompt() -> str:
+    """Знания об AIsktagOS + каталог моделей с учётом этого компьютера."""
+    try:
+        text = KNOWLEDGE_FILE.read_text(encoding="utf-8")
+    except OSError:
+        text = "Ты — ИИ-ассистент операционной системы AIsktagOS."
+    lines = [f"\n# Этот компьютер\nОперативная память: {ram_gb()} ГБ. Сейчас выбрана модель: {current()}.",
+             "\n# Каталог моделей (имя — название — сколько памяти нужно — состояние)"]
+    for m in catalog():
+        st = "установлена" if model_path(m["name"]) else "не установлена"
+        lines.append(f"- {m['name']} — {m['title']} — от {m['ram']} ГБ — {st}. {m['desc']}")
+    return text + "\n".join(lines) + "\n"
+
+
+# ------------------------------------------------------------------- Сервер --
+def _die_with_parent() -> None:
+    """llama-server завершается вместе с aisktag-ai, даже если того убили (PR_SET_PDEATHSIG)."""
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6", use_errno=True).prctl(1, signal.SIGTERM)
+    except OSError:
+        pass
+
+
+class Backend:
+    """Процесс llama-server с выбранной моделью."""
+
+    def __init__(self):
+        self.proc: subprocess.Popen | None = None
+        self.lock = threading.Lock()
+        self.model = ""
+
+    def start(self) -> None:
+        with self.lock:
+            self._stop()
+            name = current()
+            path = model_path(name)
+            self.model = name if path else ""
+            if not path:
+                return
+            self.proc = subprocess.Popen([
+                "llama-server", "-m", str(path), "--alias", name, "--host", "127.0.0.1",
+                "--port", str(BACKEND_PORT), "-c", CTX, "--jinja", "--no-webui"],
+                preexec_fn=_die_with_parent)
+
+    def _stop(self) -> None:
+        if self.proc and self.proc.poll() is None:
+            self.proc.terminate()
+            try:
+                self.proc.wait(10)
+            except subprocess.TimeoutExpired:
+                self.proc.kill()
+        self.proc = None
+
+    def stop(self) -> None:
+        with self.lock:
+            self._stop()
+
+    def ready(self) -> bool:
+        if not self.proc or self.proc.poll() is not None:
+            return False
+        try:
+            c = http.client.HTTPConnection("127.0.0.1", BACKEND_PORT, timeout=2)
+            c.request("GET", "/health")
+            return c.getresponse().status == 200
+        except (OSError, http.client.HTTPException):
+            return False
+
+
+BACKEND = Backend()
+DOWNLOADS: dict[str, dict] = {}      # имя → {"done", "total", "error"}
+DL_LOCK = threading.Lock()
+
+
+def start_download(name: str) -> None:
+    entry(name)
+    with DL_LOCK:
+        if name in DOWNLOADS and not DOWNLOADS[name]["error"]:
+            return
+        DOWNLOADS[name] = {"done": 0, "total": 0, "error": ""}
+
+    def progress(done: int, total: int) -> None:
+        DOWNLOADS[name].update(done=done, total=total)
+
+    def work() -> None:
+        try:
+            download(name, USER_DIR, progress)
+            with DL_LOCK:
+                DOWNLOADS.pop(name, None)
+            if name == current() and not BACKEND.ready():
+                BACKEND.start()
+        except Exception as e:  # noqa: BLE001 — ошибку показываем в интерфейсе
+            with DL_LOCK:
+                DOWNLOADS[name]["error"] = str(e) or e.__class__.__name__
+
+    threading.Thread(target=work, daemon=True).start()
+
+
+def state() -> dict:
+    cur = current()
+    models = []
+    for m in catalog():
+        info = {k: m.get(k) for k in ("name", "title", "desc", "ram", "builtin")}
+        info.update(installed=model_path(m["name"]) is not None, current=m["name"] == cur,
+                    download=DOWNLOADS.get(m["name"]))
+        models.append(info)
+    return {"current": cur, "ready": BACKEND.ready(), "loaded": BACKEND.model, "ram": ram_gb(),
+            "models": models}
+
+
+class Handler(BaseHTTPRequestHandler):
+    server_version = "aisktag-ai"
+
+    def log_message(self, format, *args):  # noqa: A002 — без журнала каждого запроса
+        pass
+
+    def _local(self) -> bool:
+        # Защита от подмены DNS: принимаем только запросы, адресованные localhost
+        host = (self.headers.get("Host") or "").rsplit(":", 1)[0]
+        if host in ("127.0.0.1", "localhost", "[::1]"):
+            return True
+        self.send_error(403)
+        return False
+
+    def _json(self, obj, code: int = 200) -> None:
+        body = json.dumps(obj, ensure_ascii=False).encode()
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        if not self._local():
+            return
+        path = self.path.split("?", 1)[0]
+        if path == "/aisktag/state":
+            return self._json(state())
+        if path.startswith(("/v1/", "/health", "/props")):
+            return self._proxy(b"")
+        f = UI_DIR / ("index.html" if path == "/" else path.lstrip("/"))
+        if f.resolve().is_relative_to(UI_DIR.resolve()) and f.is_file():
+            data = f.read_bytes()
+            ctype = {".html": "text/html; charset=utf-8", ".js": "text/javascript", ".css": "text/css",
+                     ".svg": "image/svg+xml", ".png": "image/png"}.get(f.suffix, "application/octet-stream")
+            self.send_response(200)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
+        self.send_error(404)
+
+    def do_POST(self):
+        if not self._local():
+            return
+        n = int(self.headers.get("Content-Length") or 0)
+        body = self.rfile.read(n) if n else b""
+        path = self.path.split("?", 1)[0]
+        if path.startswith("/aisktag/"):
+            # Нестандартный заголовок: чужой сайт в браузере не сможет отправить такой запрос
+            if self.headers.get("X-AIsktag") != "1":
+                return self.send_error(403)
+            try:
+                name = json.loads(body or b"{}").get("name", "")
+                if path == "/aisktag/pull":
+                    start_download(name)
+                elif path == "/aisktag/use":
+                    set_current(name)
+                    threading.Thread(target=BACKEND.start, daemon=True).start()
+                else:
+                    return self.send_error(404)
+            except (SystemExit, ValueError, AttributeError) as e:
+                return self._json({"error": str(e)}, 400)
+            return self._json(state())
+        if path == "/v1/chat/completions" and self.headers.get("X-AIsktag") == "1":
+            # Чат AIsktagOS: знания о системе — в начало разговора
+            try:
+                req = json.loads(body)
+                msgs = [m for m in req.get("messages", []) if m.get("role") != "system"]
+                req["messages"] = [{"role": "system", "content": system_prompt()}] + msgs
+                body = json.dumps(req, ensure_ascii=False).encode()
+            except (ValueError, AttributeError):
+                pass
+        self._proxy(body)
+
+    def _proxy(self, body: bytes) -> None:
+        """Передать запрос llama-server и отдавать ответ по мере поступления (потоковый вывод)."""
+        if not BACKEND.ready():
+            return self._json({"error": {"message": "модель ещё загружается или не установлена"}}, 503)
+        try:
+            c = http.client.HTTPConnection("127.0.0.1", BACKEND_PORT, timeout=600)
+            headers = {"Content-Type": self.headers.get("Content-Type", "application/json")}
+            c.request(self.command, self.path, body=body or None, headers=headers)
+            r = c.getresponse()
+            self.send_response(r.status)
+            for k in ("Content-Type", "Cache-Control"):
+                if r.getheader(k):
+                    self.send_header(k, r.getheader(k))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            while chunk := r.read1(65536):
+                self.wfile.write(chunk)
+                self.wfile.flush()
+        except (OSError, http.client.HTTPException):
+            pass
+        self.close_connection = True
+
+
+def _on_sigterm(*_args) -> None:
+    raise KeyboardInterrupt
+
+
+def serve() -> int:
+    if not shutil.which("llama-server"):
+        raise SystemExit("aisktag-ai: не найден llama-server (sudo apt install llama.cpp-tools)")
+    try:
+        httpd = ThreadingHTTPServer(("127.0.0.1", PORT), Handler)
+    except OSError:
+        raise SystemExit(f"aisktag-ai: порт {PORT} занят — ИИ-ассистент уже запущен? (aisktag-ai stop)") from None
+    httpd.daemon_threads = True
+    # systemctl stop присылает SIGTERM: корректно гасим и llama-server
+    signal.signal(signal.SIGTERM, _on_sigterm)
+    BACKEND.start()
+    print(f"ИИ-ассистент: {URL}  (API: {URL}/v1)", flush=True)
+    try:
+        httpd.serve_forever()
+    except KeyboardInterrupt:
+        pass
+    finally:
+        BACKEND.stop()
+    return 0
+
+
+# ---------------------------------------------------------------- Команды --
+def up() -> bool:
+    try:
+        with urllib.request.urlopen(f"{URL}/aisktag/state", timeout=2):
+            return True
+    except (OSError, urllib.error.URLError):
+        return False
+
+
+def cmd_open() -> int:
+    if not up():
+        if subprocess.run(["systemctl", "--user", "start", "aisktag-ai.service"],
+                          stderr=subprocess.DEVNULL).returncode != 0:
+            log = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "aisktag-ai.log"
+            with open(log, "ab") as out:
+                subprocess.Popen([sys.argv[0], "serve"], stdout=out, stderr=out, start_new_session=True)
+        for _ in range(50):
+            if up():
+                break
+            time.sleep(0.2)
+        else:
+            raise SystemExit("aisktag-ai: сервер не запустился (journalctl --user -u aisktag-ai)")
+    subprocess.Popen(["xdg-open", URL + "/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return 0
+
+
+def cmd_pull(name: str, system: bool) -> int:
+    def progress(done: int, total: int) -> None:
+        pct = done * 100 // total if total else 0
+        print(f"\r  {done / 1e9:.2f} из {total / 1e9:.2f} ГБ ({pct}%)", end="", flush=True)
+
+    m = entry(name)
+    print(f"Скачиваю {m['title']} — {HF}/{m['repo']}")
+    try:
+        dest = download(name, SYS_DIR if system else USER_DIR, progress)
+    except (RuntimeError, OSError, urllib.error.URLError, http.client.HTTPException) as e:
+        print()
+        raise SystemExit(f"aisktag-ai: {e}") from None
+    print(f"\nГотово: {dest}")
+    return 0
+
+
+def cmd_models() -> int:
+    cur = current()
+    print(f"Память компьютера: {ram_gb()} ГБ\n")
+    for m in catalog():
+        mark = "*" if m["name"] == cur else " "
+        st = "готова" if model_path(m["name"]) else f"не скачана — aisktag-ai pull {m['name']}"
+        print(f"{mark} {m['name']:<14} {m['title']} (от {m['ram']} ГБ ОЗУ) — {st}\n    {m['desc']}")
+    return 0
+
+
+def cmd_use(name: str) -> int:
+    set_current(name)
+    print(f"Модель по умолчанию: {entry(name)['title']}")
+    if not model_path(name):
+        print(f"Она ещё не скачана: aisktag-ai pull {name}")
+    subprocess.run(["systemctl", "--user", "try-restart", "aisktag-ai.service"], stderr=subprocess.DEVNULL)
+    return 0
+
+
+def cmd_chat() -> int:
+    name = current()
+    if not model_path(name):
+        cmd_pull(name, False)
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False, encoding="utf-8") as f:
+        f.write(system_prompt())
+    os.execvp("llama-cli", ["llama-cli", "-m", str(model_path(name)), "-c", CTX, "--jinja", "-cnv",
+                            "-sysf", f.name])
+
+
+def cmd_check_catalog() -> int:
+    """Для CI: все модели каталога есть на HuggingFace."""
+    bad = 0
+    for m in catalog():
+        try:
+            sha, size = remote_info(m)
+            print(f"ok   {m['name']:<14} {size / 1e9:.2f} ГБ  {sha[:12]}")
+        except Exception as e:  # noqa: BLE001
+            print(f"FAIL {m['name']:<14} {e}")
+            bad += 1
+    return 1 if bad else 0
+
+
+def main(argv: list[str]) -> int:
+    cmd = argv[0] if argv else "open"
+    if cmd != "serve":
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)   # «aisktag-ai models | head» без трассировки
+    arg = argv[1] if len(argv) > 1 else ""
+    if cmd in ("pull", "use") and not arg:
+        raise SystemExit(f"aisktag-ai: укажите модель: {', '.join(m['name'] for m in catalog())}")
+    commands = {
+        "open": cmd_open,
+        "serve": serve,
+        "stop": lambda: subprocess.run(["systemctl", "--user", "stop", "aisktag-ai.service"]).returncode,
+        "pull": lambda: cmd_pull(arg, "--system" in argv),
+        "use": lambda: cmd_use(arg),
+        "models": cmd_models,
+        "chat": cmd_chat,
+        "check-catalog": cmd_check_catalog,
+    }
+    if cmd in ("-h", "--help", "help"):
+        print(__doc__)
+        return 0
+    if cmd not in commands:
+        raise SystemExit(f"aisktag-ai: неизвестная команда «{cmd}» (aisktag-ai --help)")
+    return commands[cmd]()
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

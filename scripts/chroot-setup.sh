@@ -125,6 +125,13 @@ cp -r --no-preserve=mode,ownership "$B/overlay/." /
 chmod 600 /etc/netplan/*.yaml
 chmod +x /usr/bin/aisktag-* /usr/lib/aisktagos/*.sh /usr/lib/aisktagos/*.py 2>/dev/null || true
 
+# Встроенная нейросеть Qwen 2.5 1.5B (~1 ГБ) для ИИ-ассистента.
+# Без доступа к huggingface.co образ собирается без неё — модель скачается из чата при первом запуске.
+if ! aisktag-ai pull qwen --system; then
+    echo "ВНИМАНИЕ: модель Qwen не скачана, ИИ-ассистент предложит скачать её при первом запуске"
+fi
+rm -f /usr/share/aisktagos/models/*.part
+
 # Тёмная тема по умолчанию: цвета Breeze Dark + настройки AIsktagOS
 { cat /usr/share/color-schemes/BreezeDark.colors; echo; cat /usr/share/aisktagos/kdeglobals.aisktagos; } > /etc/xdg/kdeglobals
 

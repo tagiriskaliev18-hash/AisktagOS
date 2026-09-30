@@ -46,3 +46,7 @@ sqlite3
 shellcheck
 just
 direnv
+
+# Локальная нейросеть (ИИ-ассистент): llama.cpp, ускорение Vulkan на видеокартах AMD, Intel и NVIDIA
+llama.cpp-tools
+libggml0-backend-vulkan

@@ -1,0 +1,338 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ИИ-ассистент AIsktagOS</title>
+<!-- Чат с локальной нейросетью (llama-server, OpenAI-совместимый API). Без внешних ресурсов: работает офлайн. -->
+<style>
+:root {
+  --bg: #15141c; --panel: #1e1c28; --line: #2e2b3d; --text: #ecebf3; --muted: #9a97ad;
+  --accent: #6d5dfc; --accent2: #a855f7; --me: #2c2745; --code: #0f0e15;
+}
+@media (prefers-color-scheme: light) {
+  :root { --bg: #f6f5fb; --panel: #ffffff; --line: #e3e0ef; --text: #1d1b26; --muted: #6b6880;
+          --me: #ebe8ff; --code: #f1eff8; }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); display: flex; flex-direction: column;
+       font: 15px/1.55 Inter, "Noto Sans", system-ui, sans-serif; }
+header { display: flex; align-items: center; gap: 12px; padding: 12px 20px; border-bottom: 1px solid var(--line); }
+header .logo { width: 30px; height: 30px; border-radius: 9px; flex: none;
+               background: linear-gradient(135deg, var(--accent2), var(--accent)); }
+header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+header .model { color: var(--muted); font-size: 13px; }
+header .sp { flex: 1; }
+button { font: inherit; border: 1px solid var(--line); background: var(--panel); color: var(--text);
+         border-radius: 9px; padding: 7px 14px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+button:disabled { opacity: .5; cursor: default; }
+main { flex: 1; overflow-y: auto; }
+.wrap { max-width: 820px; margin: 0 auto; padding: 20px; }
+.msg { margin: 0 0 18px; display: flex; }
+.msg.me { justify-content: flex-end; }
+.bubble { max-width: 100%; padding: 10px 14px; border-radius: 14px; overflow-wrap: anywhere; }
+.me .bubble { background: var(--me); max-width: 85%; white-space: pre-wrap; }
+.ai .bubble { background: transparent; padding-left: 0; padding-right: 0; }
+.bubble p { margin: 0 0 10px; } .bubble p:last-child { margin-bottom: 0; }
+.bubble pre { background: var(--code); border: 1px solid var(--line); border-radius: 10px; padding: 12px;
+              overflow-x: auto; font: 13px/1.45 "JetBrains Mono", monospace; }
+.bubble code { font-family: "JetBrains Mono", monospace; font-size: 13px; background: var(--code);
+               padding: 1px 5px; border-radius: 5px; }
+.bubble pre code { background: none; padding: 0; }
+details.think { color: var(--muted); font-size: 13.5px; border-left: 3px solid var(--line);
+                padding: 2px 0 2px 12px; margin-bottom: 10px; white-space: pre-wrap; }
+details.think summary { cursor: pointer; }
+.err { color: #f87171; }
+.empty { text-align: center; color: var(--muted); padding: 12vh 20px 0; }
+.empty h2 { color: var(--text); font-size: 24px; margin: 0 0 8px; }
+.hints { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 20px; }
+footer { border-top: 1px solid var(--line); }
+form { max-width: 820px; margin: 0 auto; padding: 14px 20px 18px; display: flex; gap: 10px; align-items: flex-end; }
+textarea { flex: 1; resize: none; max-height: 40vh; min-height: 46px; padding: 12px 14px; font: inherit;
+           color: var(--text); background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+textarea:focus { outline: none; border-color: var(--accent); }
+.install { margin-top: 8px; }
+#panel { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: flex-start;
+         justify-content: center; padding: 6vh 16px; overflow-y: auto; }
+#panel.open { display: flex; }
+.sheet { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; width: 100%;
+         max-width: 640px; padding: 20px; }
+.sheet h2 { margin: 0 0 4px; font-size: 19px; }
+.model-row { display: flex; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.model-row .info { flex: 1; min-width: 0; }
+.model-row .t { font-weight: 600; }
+.model-row .d { color: var(--muted); font-size: 13px; }
+.badge { font-size: 11px; padding: 1px 7px; border-radius: 99px; background: var(--me); margin-left: 6px; }
+.bar { height: 6px; background: var(--line); border-radius: 3px; margin-top: 6px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.status { max-width: 820px; margin: 0 auto; padding: 8px 20px 0; color: var(--muted); font-size: 13px; }
+.note { max-width: 820px; margin: -10px auto 0; padding: 0 20px 12px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"></div>
+  <div><h1>ИИ-ассистент</h1><div class="model" id="model">загрузка…</div></div>
+  <div class="sp"></div>
+  <button id="models" type="button">Модели</button>
+  <button id="new" type="button">Новый чат</button>
+</header>
+<main id="scroll"><div class="wrap" id="log"></div></main>
+<footer>
+  <div class="status" id="status"></div>
+  <form id="form">
+    <textarea id="input" rows="1" placeholder="Спросите что-нибудь… (Enter — отправить, Shift+Enter — новая строка)" autofocus></textarea>
+    <button class="primary" id="send" type="submit">Отправить</button>
+  </form>
+  <div class="note">Нейросеть работает на этом компьютере, без интернета. Она может ошибаться — проверяйте важное.
+    API для программ: <code id="api"></code></div>
+</footer>
+<div id="panel"><div class="sheet">
+  <div style="display:flex;align-items:center"><div style="flex:1"><h2>Модели</h2>
+    <div class="model" id="ram"></div></div><button id="close" type="button">Закрыть</button></div>
+  <div id="list" style="margin-top:12px"></div>
+</div></div>
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const log = $("log"), input = $("input"), send = $("send");
+const HINTS = ["Что умеет AIsktagOS?", "Как обновить систему?", "Как откатить неудачное обновление?",
+               "Посоветуй модель для программирования", "Как создать ветку в git?"];
+const HDR = { "Content-Type": "application/json", "X-AIsktag": "1" };
+let st = null;     // состояние сервера: модели, загрузки, готовность
+let history = [];
+let busy = null;   // AbortController текущего ответа
+
+$("api").textContent = location.origin + "/v1";
+try { history = JSON.parse(localStorage.getItem("aisktag-ai-chat") || "[]"); } catch (e) { history = []; }
+function save() { try { localStorage.setItem("aisktag-ai-chat", JSON.stringify(history)); } catch (e) {} }
+
+const gb = (b) => (b / 1e9).toFixed(2).replace(".", ",");
+function title(name) {
+  const m = st && st.models.find((x) => x.name === name);
+  return m ? m.title : name;
+}
+async function refresh() {
+  try { st = await (await fetch("/aisktag/state")).json(); } catch (e) { st = null; }
+  const cur = st && st.models.find((m) => m.current);
+  if (!st) {
+    $("model").textContent = "сервер недоступен";
+    $("status").textContent = "Сервер ИИ-ассистента не отвечает. Откройте «ИИ-ассистент» из меню ещё раз.";
+  } else if (st.ready) {
+    $("model").textContent = cur.title + " · работает на этом компьютере";
+    $("status").textContent = "";
+  } else if (!cur.installed) {
+    $("model").textContent = cur.title + " · не скачана";
+    $("status").textContent = cur.download ? "Скачиваю модель " + cur.title + "…" :
+      "Модель " + cur.title + " не скачана. Нажмите «Модели», чтобы скачать её или выбрать другую.";
+  } else {
+    $("model").textContent = cur.title + " · загружается";
+    $("status").textContent = "Модель загружается в память, это занимает до минуты…";
+  }
+  send.disabled = !(st && st.ready) && !busy;
+  if ($("panel").classList.contains("open")) renderModels();
+  document.querySelectorAll("[data-install]").forEach(updateInstall);
+}
+async function act(what, name) {
+  try {
+    const r = await fetch("/aisktag/" + what, { method: "POST", headers: HDR, body: JSON.stringify({ name }) });
+    st = await r.json();
+  } catch (e) {}
+  refresh();
+}
+function renderModels() {
+  $("ram").textContent = "Память компьютера: " + String(st.ram).replace(".", ",") +
+                         " ГБ. Модели скачиваются с huggingface.co один раз и дальше работают без интернета.";
+  const list = $("list");
+  list.innerHTML = "";
+  st.models.forEach((m) => {
+    const row = document.createElement("div");
+    row.className = "model-row";
+    const warn = m.ram > st.ram ? " · <span class=\"err\">мало памяти для этой модели</span>" : "";
+    let extra = "";
+    if (m.download && m.download.error) extra = '<div class="err">' + esc(m.download.error) + "</div>";
+    else if (m.download) {
+      const pct = m.download.total ? Math.floor(m.download.done * 100 / m.download.total) : 0;
+      extra = '<div class="d">' + gb(m.download.done) + " из " + gb(m.download.total) + " ГБ</div>" +
+              '<div class="bar"><i style="width:' + pct + '%"></i></div>';
+    }
+    row.innerHTML = '<div class="info"><div class="t">' + esc(m.title) +
+      (m.current ? '<span class="badge">выбрана</span>' : "") + (m.builtin ? '<span class="badge">встроена</span>' : "") +
+      '</div><div class="d">' + esc(m.desc) + " Нужно от " + m.ram + " ГБ памяти" + warn + "</div>" + extra + "</div>";
+    const b = document.createElement("button");
+    if (m.installed && m.current) { b.textContent = "Выбрана"; b.disabled = true; }
+    else if (m.installed) { b.textContent = "Выбрать"; b.onclick = () => act("use", m.name); }
+    else if (m.download && !m.download.error) { b.textContent = "Скачивается…"; b.disabled = true; }
+    else { b.textContent = "Скачать"; b.className = "primary"; b.onclick = () => act("pull", m.name); }
+    row.appendChild(b);
+    list.appendChild(row);
+  });
+}
+// Кнопка «Установить» из метки [[install:имя]] в ответе модели
+function updateInstall(btn) {
+  const name = btn.dataset.install;
+  const m = st && st.models.find((x) => x.name === name);
+  if (!m) { btn.remove(); return; }
+  btn.onclick = null; btn.disabled = false; btn.className = "";
+  if (m.installed && m.current) { btn.textContent = m.title + " — выбрана"; btn.disabled = true; }
+  else if (m.installed) { btn.textContent = "Переключиться на " + m.title; btn.onclick = () => act("use", name); }
+  else if (m.download && !m.download.error) {
+    const pct = m.download.total ? Math.floor(m.download.done * 100 / m.download.total) : 0;
+    btn.textContent = "Скачивается " + m.title + "… " + pct + "%"; btn.disabled = true;
+  } else {
+    btn.textContent = "Установить " + m.title + " (от " + m.ram + " ГБ ОЗУ)"; btn.className = "primary";
+    btn.onclick = () => act("pull", name);
+  }
+}
+$("models").onclick = () => { $("panel").classList.add("open"); if (st) renderModels(); };
+$("close").onclick = () => $("panel").classList.remove("open");
+$("panel").onclick = (e) => { if (e.target === $("panel")) $("panel").classList.remove("open"); };
+refresh();
+setInterval(refresh, 1500);
+
+function esc(s) {
+  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+// Минимальный Markdown: блоки кода, `код`, **жирный**, абзацы
+function md(text) {
+  const parts = text.split(/```/);
+  let html = "";
+  parts.forEach((part, i) => {
+    if (i % 2 === 1) {
+      const code = part.replace(/^[\w+#.-]*\n/, "");
+      html += "<pre><code>" + esc(code.replace(/\n$/, "")) + "</code></pre>";
+    } else {
+      part.split(/\n{2,}/).forEach((para) => {
+        if (!para.trim()) return;
+        let h = esc(para).replace(/`([^`\n]+)`/g, "<code>$1</code>")
+                         .replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>").replace(/\n/g, "<br>");
+        html += "<p>" + h + "</p>";
+      });
+    }
+  });
+  return html;
+}
+// Модели вроде DeepSeek R1 пишут размышления в <think>…</think>, если сервер их не отделил
+function splitThink(text) {
+  const m = text.match(/^\s*<think>([\s\S]*?)(<\/think>|$)([\s\S]*)$/);
+  return m ? { think: m[1], answer: m[3] } : { think: "", answer: text };
+}
+
+function bubble(role) {
+  const row = document.createElement("div");
+  row.className = "msg " + (role === "user" ? "me" : "ai");
+  const b = document.createElement("div");
+  b.className = "bubble";
+  row.appendChild(b);
+  log.appendChild(row);
+  return b;
+}
+function renderAnswer(b, content, reasoning) {
+  const s = splitThink(content);
+  const think = (reasoning || "") + s.think;
+  const names = [];
+  const answer = s.answer.replace(/\[\[\s*install\s*:\s*([\w.-]+)\s*\]\]/g, (_, n) => { names.push(n); return ""; });
+  b.innerHTML = (think.trim() ? '<details class="think"><summary>Размышления</summary>' + esc(think.trim()) + "</details>" : "") +
+                md(answer);
+  [...new Set(names)].forEach((n) => {
+    const btn = document.createElement("button");
+    btn.type = "button"; btn.dataset.install = n; btn.classList.add("install");
+    b.appendChild(btn);
+    updateInstall(btn);
+  });
+}
+function scrollDown() { const m = $("scroll"); m.scrollTop = m.scrollHeight; }
+
+function render() {
+  log.innerHTML = "";
+  if (!history.length) {
+    log.innerHTML = '<div class="empty"><h2>Чем помочь?</h2>Локальная нейросеть отвечает прямо на этом компьютере.' +
+                    '<div class="hints"></div></div>';
+    const hints = log.querySelector(".hints");
+    HINTS.forEach((h) => {
+      const btn = document.createElement("button");
+      btn.type = "button"; btn.textContent = h;
+      btn.onclick = () => { input.value = h; ask(); };
+      hints.appendChild(btn);
+    });
+    return;
+  }
+  history.forEach((m) => {
+    const b = bubble(m.role);
+    if (m.role === "user") b.textContent = m.content; else renderAnswer(b, m.content, m.reasoning);
+  });
+  scrollDown();
+}
+
+async function ask() {
+  const text = input.value.trim();
+  if (!text || busy || !(st && st.ready)) return;
+  input.value = ""; autosize();
+  history.push({ role: "user", content: text });
+  render();
+  const b = bubble("assistant");
+  b.innerHTML = '<span style="color:var(--muted)">…</span>';
+  scrollDown();
+  const reply = { role: "assistant", content: "", reasoning: "" };
+  busy = new AbortController();
+  send.textContent = "Стоп"; send.classList.remove("primary");
+  try {
+    const messages = history.map((m) => ({ role: m.role, content: m.content }));
+    const r = await fetch("/v1/chat/completions", {
+      method: "POST", headers: HDR, signal: busy.signal,
+      body: JSON.stringify({ messages, stream: true }),
+    });
+    if (!r.ok) {
+      let msg = "сервер ответил " + r.status;
+      try { const j = await r.json(); msg = (j.error && (j.error.message || j.error)) || msg; } catch (e) {}
+      throw new Error(msg);
+    }
+    const reader = r.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n");
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim();
+        if (data === "[DONE]") continue;
+        let j; try { j = JSON.parse(data); } catch (e) { continue; }
+        const d = (j.choices && j.choices[0] && j.choices[0].delta) || {};
+        if (d.reasoning_content) reply.reasoning += d.reasoning_content;
+        if (d.content) reply.content += d.content;
+      }
+      renderAnswer(b, reply.content, reply.reasoning);
+      scrollDown();
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") {
+      b.insertAdjacentHTML("beforeend", '<p class="err">Ошибка: ' + esc(String(e.message || e)) +
+                           "</p>");
+    }
+  } finally {
+    busy = null;
+    send.textContent = "Отправить"; send.classList.add("primary");
+    send.disabled = !(st && st.ready);
+    if (reply.content || reply.reasoning) { history.push(reply); save(); }
+    else if (!history.length || history[history.length - 1].role === "user") { save(); }
+    input.focus();
+  }
+}
+
+function autosize() { input.style.height = "auto"; input.style.height = input.scrollHeight + "px"; }
+input.addEventListener("input", autosize);
+input.addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) { e.preventDefault(); ask(); }
+});
+$("form").addEventListener("submit", (e) => { e.preventDefault(); if (busy) busy.abort(); else ask(); });
+$("new").onclick = () => { if (busy) busy.abort(); history = []; save(); render(); input.focus(); };
+render();
+</script>
+</body>
+</html>

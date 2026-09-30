@@ -68,6 +68,20 @@ INSTALL_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
 </svg>
 """
 
+# Значок ИИ-ассистента: облачко чата с «искрой»
+AI_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a855f7"/><stop offset="1" stop-color="#6d5dfc"/>
+    </linearGradient>
+  </defs>
+  <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#bg)"/>
+  <path d="M60 76a24 24 0 0 1 24-24h88a24 24 0 0 1 24 24v64a24 24 0 0 1-24 24h-52l-36 30v-30a24 24 0 0 1-24-24z"
+        fill="#fff"/>
+  <path d="M128 72l9 25 25 9-25 9-9 25-9-25-25-9 25-9z" fill="#7c5cfa"/>
+</svg>
+"""
+
 
 def wallpaper(w: int, h: int, darken: float = 1.0) -> Image.Image:
     """Мягкий «жидкий» градиент в духе обоев macOS."""
@@ -108,9 +122,11 @@ def main() -> None:
     (icons / "scalable/apps/aisktagos-logo.svg").write_text(LOGO_SVG)
     (icons / "scalable/apps/aisktagos-logo-symbolic.svg").write_text(LOGO_SYMBOLIC_SVG)
     (icons / "scalable/apps/aisktagos-install.svg").write_text(INSTALL_SVG)
+    (icons / "scalable/apps/aisktag-ai.svg").write_text(AI_SVG)
     for s in (16, 22, 24, 32, 48, 64, 128, 256):
         svg_to_png(LOGO_SVG, icons / f"{s}x{s}/apps/aisktagos-logo.png", s)
         svg_to_png(INSTALL_SVG, icons / f"{s}x{s}/apps/aisktagos-install.png", s)
+        svg_to_png(AI_SVG, icons / f"{s}x{s}/apps/aisktag-ai.png", s)
 
     share = OVERLAY / "usr/share/aisktagos"
     svg_to_png(LOGO_SVG, share / "logo.png", 256)

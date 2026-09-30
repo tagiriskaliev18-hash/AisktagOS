@@ -39,6 +39,9 @@ jobs:
           sudo apt-get install -y -qq debootstrap squashfs-tools xorriso grub-pc-bin \
                grub-efi-amd64-bin mtools dosfstools
 
+      - name: Проверка каталога моделей ИИ-ассистента на HuggingFace
+        run: AISKTAG_AI_SHARE=overlay/usr/share/aisktagos python3 overlay/usr/bin/aisktag-ai check-catalog
+
       - name: Сборка ISO
         run: sudo WORK_DIR=/mnt/aisktagos-work OUT_DIR="$GITHUB_WORKSPACE/out" ./build.sh
 

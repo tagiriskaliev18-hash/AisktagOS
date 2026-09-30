@@ -1,0 +1,24 @@
+[Desktop Entry]
+Type=Application
+Name=ИИ-ассистент
+Name[en]=AI Assistant
+GenericName=Локальная нейросеть
+GenericName[en]=Local AI
+Comment=Поможет разобраться в AIsktagOS и с кодом. Работает без интернета (Qwen, DeepSeek)
+Comment[en]=Local AI assistant for AIsktagOS and coding. Works offline (Qwen, DeepSeek)
+Exec=aisktag-ai
+Icon=aisktag-ai
+Terminal=false
+Categories=Utility;
+Keywords=AI;LLM;Qwen;DeepSeek;chat;GPT;ИИ;нейросеть;ассистент;чат;
+Actions=terminal;models;
+
+[Desktop Action terminal]
+Name=Чат в терминале
+Name[en]=Chat in terminal
+Exec=kitty --title ИИ-ассистент aisktag-ai chat
+
+[Desktop Action models]
+Name=Список моделей
+Name[en]=List models
+Exec=kitty --hold aisktag-ai models

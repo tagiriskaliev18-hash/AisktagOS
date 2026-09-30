@@ -41,6 +41,10 @@ overlay/                    файлы поверх Ubuntu; копируются
   usr/lib/aisktagos/        aisktag-center.py (PyQt6: приветствие, драйверы, dev-инструменты), post-install.sh,
                             display-fallback.sh (SDDM→X11 без DRM), live-session.sh, pre-apt-snapshot.sh
   usr/bin/aisktag-*         запуск центра и установщика
+  usr/bin/aisktag-ai        ИИ-ассистент (Python, только stdlib): сервер на 127.0.0.1:8484 отдаёт чат (usr/share/aisktagos/ai-chat),
+                            проксирует /v1 в llama-server (:8485), подставляет знания об ОС (ai-knowledge.md) и каталог
+                            моделей (ai-models.json), скачивает модели с HuggingFace с проверкой SHA256; служба usr/lib/systemd/user/aisktag-ai.service
+  usr/lib/aisktagos/desktop-icons.sh  при каждом входе кладёт на рабочий стол Firefox и ИИ-ассистента
 assets/                     генераторы графики (Pillow + rsvg-convert + шрифт Inter)
 tools/test-vm.py            стенд QEMU: «железо» VMware, снимки экрана, клики, консоль ttyS0
 .github/workflows/build-iso.yml  сборка ISO (xz) и публикация в Releases (части по 1,9 ГБ, если больше 2 ГБ)
@@ -101,6 +105,15 @@ python3 tools/test-vm.py sh dbg aisktag              # вход live-польз�
 14. В песочнице без доступа к packages.mozilla.org вместо Firefox ставится Falkon. На GitHub Actions Firefox ставится нормально.
 15. Не переводите базу на 24.04 «noble»: сборка падает на `plasma-session-x11`, `lazygit`, `starship`, `fastfetch`, а в noble Plasma 5.27 — раскладка и установщик рассчитаны на Plasma 6. Раннер GitHub на ubuntu-24.04 это не мешает: `build.sh` сам добавляет debootstrap-скрипт для resolute. Номер `DISTRIB_RELEASE` берётся из os-release базы.
 16. Папка `overlay/etc/xdg/plasma-workspace/env/` (`aisktagos-render.sh`, `aisktagos-live.sh`) однажды не попала в git — проверяйте `git ls-files overlay/etc/xdg/plasma-workspace/env`. Без `aisktagos-live.sh` live-сессия уходит на экран блокировки через ~10 минут.
+
+## ИИ-ассистент
+
+- Движок — `llama.cpp-tools` из Ubuntu + `libggml0-backend-vulkan` (Vulkan на AMD/Intel/NVIDIA; CPU-устройства вроде llvmpipe ggml пропускает).
+- Встроенная модель Qwen 2.5 1.5B Q4_K_M качается при сборке (`aisktag-ai pull qwen --system` в `chroot-setup.sh`) в `/usr/share/aisktagos/models`. Без доступа к huggingface.co образ собирается без неё, и чат предложит скачать модель. Модели пользователя лежат в `~/.local/share/aisktagos/models`.
+- Каталог моделей — `overlay/usr/share/aisktagos/ai-models.json`. CI до сборки проверяет, что все файлы каталога существуют на HuggingFace (`aisktag-ai check-catalog`).
+- Знания об ОС для модели — `ai-knowledge.md` (около 1,9 тыс. токенов вместе с каталогом при контексте 8192). Меняете что-то заметное в системе — обновите этот файл.
+- Кнопка установки: модель пишет метку `[[install:имя]]`, чат превращает её в кнопку. Действия `/aisktag/*` требуют заголовок `X-AIsktag: 1` (защита от CSRF), а все запросы — Host `localhost`/`127.0.0.1` (защита от подмены DNS).
+- Тест без интернета: крошечная модель qwen2 со случайными весами, собранная из `ggml-vocab-qwen2.gguf` и gguf-py (оба есть в sdist `llama-cpp-python` на PyPI).
 
 ## Что делать дальше (приоритеты)
 

@@ -1,0 +1,23 @@
+[
+  {"name": "qwen", "title": "Qwen 2.5 1.5B", "repo": "Qwen/Qwen2.5-1.5B-Instruct-GGUF",
+   "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf", "ram": 4, "builtin": true,
+   "desc": "Универсальный помощник, встроен в систему. Быстрый, подходит для любого ПК."},
+  {"name": "qwen-coder", "title": "Qwen 2.5 Coder 1.5B", "repo": "Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF",
+   "file": "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf", "ram": 4,
+   "desc": "Помощник программиста: пишет и объясняет код. Быстрый."},
+  {"name": "deepseek", "title": "DeepSeek R1 1.5B", "repo": "bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF",
+   "file": "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf", "ram": 4,
+   "desc": "Рассуждает перед ответом: математика, логика, задачи по шагам."},
+  {"name": "qwen-3b", "title": "Qwen 2.5 3B", "repo": "Qwen/Qwen2.5-3B-Instruct-GGUF",
+   "file": "qwen2.5-3b-instruct-q4_k_m.gguf", "ram": 6,
+   "desc": "Умнее встроенной модели, заметно лучше говорит по-русски."},
+  {"name": "qwen-7b", "title": "Qwen 2.5 7B", "repo": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+   "file": "Qwen2.5-7B-Instruct-Q4_K_M.gguf", "ram": 10,
+   "desc": "Сильный универсальный ассистент. Лучше с видеокартой."},
+  {"name": "qwen-coder-7b", "title": "Qwen 2.5 Coder 7B", "repo": "bartowski/Qwen2.5-Coder-7B-Instruct-GGUF",
+   "file": "Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf", "ram": 10,
+   "desc": "Сильный помощник программиста. Лучше с видеокартой."},
+  {"name": "deepseek-7b", "title": "DeepSeek R1 7B", "repo": "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF",
+   "file": "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf", "ram": 10,
+   "desc": "Сильная рассуждающая модель. Лучше с видеокартой."}
+]

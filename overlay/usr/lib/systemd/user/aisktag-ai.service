@@ -1,0 +1,13 @@
+[Unit]
+Description=ИИ-ассистент AIsktagOS (локальная нейросеть llama.cpp)
+Documentation=man:llama-server(1)
+
+[Service]
+ExecStart=/usr/bin/aisktag-ai serve
+Restart=on-failure
+RestartSec=3
+# Нейросеть не должна мешать остальной системе
+Nice=5
+
+[Install]
+WantedBy=default.target

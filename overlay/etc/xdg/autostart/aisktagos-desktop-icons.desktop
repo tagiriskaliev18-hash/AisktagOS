@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=AIsktagOS: ярлыки на рабочем столе
+Comment=Firefox и ИИ-ассистент на рабочем столе
+Exec=/usr/lib/aisktagos/desktop-icons.sh
+NoDisplay=true
+X-KDE-autostart-phase=1
+OnlyShowIn=KDE;
