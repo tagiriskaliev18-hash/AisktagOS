@@ -14,6 +14,15 @@ if (-not (Test-Path $VBoxManage)) {
     exit 1
 }
 
+# Если в Windows работает Hyper-V, VirtualBox запускает ВМ через него (зелёная черепаха
+# в строке состояния) в 10–20 раз медленнее: загрузка выглядит зависшей на строках systemd.
+$HypervisorOn = $false
+try { $HypervisorOn = (Get-CimInstance Win32_ComputerSystem).HypervisorPresent } catch {}
+if ($HypervisorOn -and $Action -in @("setup", "start")) {
+    Write-Warning "Hyper-V is active: VirtualBox will run this VM very slowly (green turtle icon). Boot may take 10-15 minutes."
+    Write-Warning "To fix (as Administrator): bcdedit /set hypervisorlaunchtype off; turn off Core isolation > Memory integrity; reboot Windows."
+}
+
 $ResolvedIso = (Resolve-Path $IsoPath -ErrorAction SilentlyContinue).Path
 $VmFolder = "$HOME\VirtualBox VMs\$VmName"
 $VdiPath = "$VmFolder\$VmName.vdi"

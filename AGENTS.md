@@ -100,6 +100,8 @@ python3 tools/test-vm.py sh dbg aisktag              # вход live-польз�
 15. Меню загрузки без `quiet splash` (`loglevel=3 systemd.show_status=true`): пользователь должен видеть ход загрузки. Calamares запускается с `-d` — кнопка живого журнала установки.
 16. VirtualBox: VMSVGA и **3D-ускорение выключено** — с 3D рабочий стол KDE часто остаётся чёрным.
 17. Перед коммитом `bash -n` для всех скриптов: однажды в `aisktag-install` попала склеенная строка (`fi$WAYLAND_DISPLAY …`), и установщик не запускался вовсе.
+18. Зелёная черепаха в строке состояния VirtualBox — Windows с Hyper-V (VirtualBox работает через NEM в 10–20 раз медленнее). Загрузка «замирает» на строках `Starting …`, хотя система жива. Лечится `bcdedit /set hypervisorlaunchtype off` и выключением «Целостности памяти»; `tools/vbox-vm.ps1` предупреждает об этом.
+19. В тестовом QEMU запускайте ВМ с `VGA=std`: при `-vga vmware` vmwgfx выкидывает simpledrm и сам не загружается («unsupported hypervisor», «no pitchlock»), `/dev/dri` нет, logind пишет `CanGraphical=no`, и SDDM ждёт вечно. Это особенность QEMU, не системы.
 
 ## Что делать дальше (приоритеты)
 
