@@ -140,6 +140,32 @@ stage_iso() {
     build_iso_image
 }
 
+# Шрифт Inter для темы GRUB (из fonts-inter внутри образа). Без grub-mkfont или шрифта
+# тема остаётся рабочей: GRUB подставит unicode.pf2.
+build_grub_fonts() {
+    local dir="$1" regular bold spec name size src
+    if ! command -v grub-mkfont >/dev/null; then
+        log "grub-mkfont не найден — меню загрузки будет со шрифтом Unifont"
+        return 0
+    fi
+    regular="$(find "$CHROOT/usr/share/fonts" -iname 'Inter-Regular.*' 2>/dev/null | head -1)"
+    bold="$(find "$CHROOT/usr/share/fonts" \( -iname 'Inter-SemiBold.*' -o -iname 'Inter-Bold.*' \) 2>/dev/null | head -1)"
+    [ -n "$regular" ] || regular="$(find "$CHROOT/usr/share/fonts" -iname 'InterVariable.*' 2>/dev/null | head -1)"
+    [ -n "$bold" ] || bold="$regular"
+    if [ -z "$regular" ]; then
+        log "Шрифт Inter не найден в образе — меню загрузки будет со шрифтом Unifont"
+        return 0
+    fi
+    # Имена совпадают с теми, что указаны в iso/theme/theme.txt и iso/grub.cfg
+    for spec in "Regular:16" "Regular:20" "Bold:44"; do
+        name="${spec%%:*}"
+        size="${spec##*:}"
+        src="$regular"
+        [ "$name" = Bold ] && src="$bold"
+        grub-mkfont -s "$size" -n "Inter $name $size" -o "$dir/inter-${name,,}-$size.pf2" "$src"
+    done
+}
+
 build_grub() {
     log "Загрузчик GRUB (BIOS + UEFI + Secure Boot)"
     local g="$ISO_TREE/boot/grub"
@@ -152,6 +178,7 @@ build_grub() {
 
     mkdir -p "$g/themes/aisktagos"
     cp "$ROOT_DIR"/iso/theme/* "$g/themes/aisktagos/"
+    build_grub_fonts "$g/themes/aisktagos"
     mkdir -p "$g/fonts"
     cp "$CHROOT/usr/share/grub/unicode.pf2" "$g/fonts/unicode.pf2"
 

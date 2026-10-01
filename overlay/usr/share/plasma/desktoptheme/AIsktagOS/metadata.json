@@ -1,0 +1,11 @@
+{
+    "KPlugin": {
+        "Authors": [ { "Name": "AIsktagOS" } ],
+        "Description": "Стеклянные панели AIsktagOS: строка меню и плавающий док",
+        "Id": "AIsktagOS",
+        "License": "GPL-2.0-or-later",
+        "Name": "AIsktagOS Glass",
+        "Version": "2.0"
+    },
+    "X-Plasma-API": "5.0"
+}

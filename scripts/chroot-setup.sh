@@ -156,7 +156,7 @@ echo "${OS_NAME} ${OS_VERSION}" > /etc/issue.net
 # Кодовое имя остаётся от Ubuntu — для совместимости с PPA и сторонними репозиториями
 cat > /etc/lsb-release <<EOF
 DISTRIB_ID=Ubuntu
-DISTRIB_RELEASE=26.04
+DISTRIB_RELEASE=${UBUNTU_VERSION}
 DISTRIB_CODENAME=${UBUNTU_SUITE}
 DISTRIB_DESCRIPTION="${OS_NAME} ${OS_VERSION} (${OS_CODENAME})"
 EOF
@@ -184,6 +184,9 @@ sed -i 's|^#\?SHELL=.*|SHELL=/usr/bin/zsh|' /etc/default/useradd
 # --- Службы -------------------------------------------------------------------
 systemctl enable NetworkManager sddm aisktagos-flathub.service
 systemctl set-default graphical.target
+# Сетью управляет NetworkManager; ожидание systemd-networkd (если его притянул netplan)
+# только задерживает загрузку до 2 минут «A start job is running for Wait for Network…»
+systemctl mask systemd-networkd-wait-online.service || true
 # Docker запускается по первому обращению — не тормозит загрузку
 systemctl disable docker.service || true
 systemctl enable docker.socket || true

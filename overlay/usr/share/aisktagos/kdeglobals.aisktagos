@@ -7,7 +7,7 @@ smallestReadableFont=Inter,8,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 fixed=JetBrains Mono,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 TerminalApplication=kitty
 TerminalService=kitty.desktop
-AccentColor=109,93,252
+AccentColor=61,123,255
 accentColorFromWallpaper=false
 
 [WM]

@@ -29,8 +29,10 @@ images:
 slideshow:               "show.qml"
 slideshowAPI:            1
 
+# Цвета списка шагов слева (Calamares рисует его сам, QSS на него не действует).
+# Остальное оформление — в stylesheet.qss рядом.
 style:
-   SidebarBackground:        "#12142a"
-   SidebarText:              "#c9cce6"
+   SidebarBackground:        "#0d1426"
+   SidebarText:              "#8b95b8"
    SidebarTextCurrent:       "#ffffff"
-   SidebarBackgroundCurrent: "#6d5dfc"
+   SidebarBackgroundCurrent: "#1f6dff"

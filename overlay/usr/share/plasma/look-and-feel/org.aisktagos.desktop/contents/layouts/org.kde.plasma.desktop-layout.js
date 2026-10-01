@@ -1,4 +1,6 @@
-// AIsktagOS: строка меню сверху + плавающий док снизу (в духе macOS)
+// AIsktagOS: стеклянная строка меню сверху + парящий док снизу (в духе macOS).
+// Стекло и размытие даёт стиль Plasma «AIsktagOS Glass» (desktoptheme/AIsktagOS).
+// Скрипт рассчитан и на Plasma 5.27 (Ubuntu 24.04), и на Plasma 6.
 
 // ---- Строка меню ----------------------------------------------------------
 var menuBar = new Panel;
@@ -23,6 +25,9 @@ clock.currentConfigGroup = ["Appearance"];
 clock.writeConfig("showDate", true);
 clock.writeConfig("dateDisplayFormat", "BesideTime");
 clock.writeConfig("dateFormat", "shortDate");
+clock.writeConfig("autoFontAndSize", false);
+clock.writeConfig("fontFamily", "Inter");
+clock.writeConfig("fontWeight", 500);
 
 // ---- Док ------------------------------------------------------------------
 var dock = new Panel;
@@ -30,13 +35,20 @@ dock.location = "bottom";
 dock.height = Math.round(gridUnit * 3.4);
 dock.floating = true;
 dock.alignment = "center";
-dock.lengthMode = "fit";
 dock.hiding = "dodgewindows";
+// В Plasma 6 док сам подстраивается по ширине значков; в 5.27 такого режима нет,
+// поэтому ширина считается ниже, после добавления значков
+var dockFits = typeof dock.lengthMode !== "undefined";
+if (dockFits) {
+    dock.lengthMode = "fit";
+}
 
 // Все приложения на весь экран (аналог Launchpad)
 var launchpad = dock.addWidget("org.kde.plasma.kickerdash");
 launchpad.currentConfigGroup = ["General"];
 launchpad.writeConfig("icon", "view-app-grid-symbolic");
+// Тонкий светящийся разделитель (рисуется из widgets/line.svg стиля AIsktagOS Glass)
+dock.addWidget("org.kde.plasma.marginsseparator");
 
 // Для каждого места в доке — варианты по порядку; берётся первый установленный
 var dockApps = [
@@ -66,6 +78,13 @@ tasks.writeConfig("iconSpacing", 2);
 
 dock.addWidget("org.kde.plasma.marginsseparator");
 dock.addWidget("org.kde.plasma.trash");
+
+if (!dockFits) {
+    // Plasma 5.27: значки + Launchpad + корзина + разделители, с запасом под открытые окна
+    var dockLength = Math.round((launchers.length + 4) * dock.height * 0.92 + gridUnit * 2);
+    dock.minimumLength = dockLength;
+    dock.maximumLength = dockLength;
+}
 
 // ---- Обои -----------------------------------------------------------------
 var desktopsArray = desktopsForActivity(currentActivity());

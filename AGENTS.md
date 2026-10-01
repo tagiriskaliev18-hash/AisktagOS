@@ -37,11 +37,17 @@ overlay/                    файлы поверх Ubuntu; копируются
   etc/xdg/                  умолчания KDE (kdeglobals собирается в chroot из BreezeDark.colors + usr/share/aisktagos/kdeglobals.aisktagos)
   etc/xdg/plasma-workspace/env/  aisktagos-render.sh (программная отрисовка без renderD*), aisktagos-live.sh (live: без блокировки/сна)
   usr/share/plasma/look-and-feel/org.aisktagos.desktop/  раскладка: строка меню + док (layout.js)
-  usr/share/aurorae/themes/AIsktagOS/  тема окон со «светофором» (генерируется assets/make-aurorae.py)
+  usr/share/aurorae/themes/AIsktagOS/  тема окон «Frosted Glass» со «светофором» (генерируется assets/make-aurorae.py;
+                            элементы mask-* в decoration.svg включают размытие KWin под заголовком)
+  usr/share/plasma/desktoptheme/AIsktagOS/  стиль Plasma «AIsktagOS Glass»: стеклянные строка меню и док
+                            (генерируется assets/make-plasma-theme.py, остальное берётся из breeze-dark)
+  etc/calamares/branding/aisktagos/stylesheet.qss  оформление установщика (Calamares загружает его сам)
   usr/lib/aisktagos/        aisktag-center.py (PyQt6: приветствие, драйверы, dev-инструменты), post-install.sh,
                             display-fallback.sh (SDDM→X11 без DRM), live-session.sh, pre-apt-snapshot.sh
   usr/bin/aisktag-*         запуск центра и установщика
-assets/                     генераторы графики (Pillow + rsvg-convert + шрифт Inter)
+assets/                     генераторы графики (Pillow + rsvg-convert + шрифт Inter):
+                            make-assets.py [icons|wallpapers|grub|slides], make-aurorae.py, make-plasma-theme.py;
+                            grub и slides собираются без rsvg-convert (хоть на Windows)
 tools/test-vm.py            стенд QEMU: «железо» VMware, снимки экрана, клики, консоль ttyS0
 .github/workflows/build-iso.yml  сборка ISO (xz) и публикация в Releases (части по 1,9 ГБ, если больше 2 ГБ)
 ```

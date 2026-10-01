@@ -14,8 +14,9 @@ magiclampEnabled=true
 squashEnabled=false
 
 [Effect-blur]
-BlurStrength=12
-NoiseStrength=2
+# Матовое стекло: сильное размытие + лёгкое «зерно» (тема окон и панели прозрачны)
+BlurStrength=11
+NoiseStrength=5
 
 [Effect-overview]
 BorderActivate=5

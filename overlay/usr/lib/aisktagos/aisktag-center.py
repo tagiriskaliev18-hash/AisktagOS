@@ -11,29 +11,71 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QProcess, QSize, Qt
-from PyQt6.QtGui import QFont, QIcon, QPixmap
-from PyQt6.QtWidgets import (QApplication, QCheckBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
-                             QListWidget, QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton,
-                             QScrollArea, QStackedWidget, QVBoxLayout, QWidget)
+from PyQt6.QtCore import QEasingCurve, QProcess, QPropertyAnimation, QSize, Qt
+from PyQt6.QtGui import QIcon, QPixmap
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QFrame, QGraphicsOpacityEffect, QGridLayout,
+                             QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
+                             QPlainTextEdit, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout,
+                             QWidget)
 
 DONE_FLAG = Path.home() / ".config/aisktagos/welcome-done"
 LIVE = "boot=casper" in Path("/proc/cmdline").read_text()
 LOGO = "/usr/share/aisktagos/logo.png"
 
-STYLE = """
-QWidget { font-size: 10.5pt; }
-QListWidget#nav { background: palette(base); border: none; padding: 8px; }
-QListWidget#nav::item { padding: 10px 12px; border-radius: 8px; margin: 2px 0; }
-QListWidget#nav::item:selected { background: #6d5dfc; color: white; }
-QLabel#h1 { font-size: 22pt; font-weight: 600; }
-QLabel#h2 { font-size: 14pt; font-weight: 600; }
-QLabel#muted { color: palette(placeholder-text); }
-QFrame#card { background: palette(base); border-radius: 12px; }
-QPushButton#tile { text-align: left; padding: 14px; border-radius: 10px; font-size: 11pt; }
-QPushButton#primary { background: #6d5dfc; color: white; border-radius: 8px; padding: 8px 18px; font-weight: 600; }
-QPushButton#primary:disabled { background: #4a4760; color: #aaa; }
-QPlainTextEdit { font-family: 'JetBrains Mono'; font-size: 9pt; border-radius: 8px; }
+# Палитра «Cyber-Cyan / Neon-Blue» — та же, что у установщика и темы окон
+CYAN = "#22e4ff"
+STATUS_COLORS = {"ok": "#2fd27a", "warn": "#febc2e", "info": CYAN, "off": "#7d87ab"}
+
+STYLE = f"""
+QWidget {{ font-family: Inter; font-size: 10.5pt; color: #e6ecff; }}
+QWidget#root {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0a0f1e, stop:1 #0d1430); }}
+QStackedWidget, QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; }}
+
+QListWidget#nav {{ background: rgba(14, 20, 38, 0.92); border: none;
+    border-right: 1px solid rgba(120, 200, 255, 0.12); padding: 14px 10px; outline: none; }}
+QListWidget#nav::item {{ padding: 11px 12px; border-radius: 10px; margin: 3px 0; color: #aeb8da; }}
+QListWidget#nav::item:hover {{ background: rgba(34, 228, 255, 0.07); color: #ffffff; }}
+QListWidget#nav::item:selected {{ color: #ffffff; border: 1px solid rgba(34, 228, 255, 0.55);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+                                stop:0 rgba(31, 184, 255, 0.35), stop:1 rgba(61, 107, 255, 0.30)); }}
+
+QLabel#h1 {{ font-size: 22pt; font-weight: 600; color: #ffffff; }}
+QLabel#h2 {{ font-size: 13.5pt; font-weight: 600; color: #ffffff; }}
+QLabel#muted {{ color: #8b95b8; }}
+
+QFrame#card {{ background: rgba(18, 26, 46, 0.85); border: 1px solid rgba(120, 200, 255, 0.14);
+    border-radius: 16px; }}
+
+QPushButton {{ background: #16203a; border: 1px solid rgba(120, 200, 255, 0.22); border-radius: 10px;
+    padding: 8px 16px; }}
+QPushButton:hover {{ border: 1px solid {CYAN}; }}
+QPushButton:disabled {{ color: #5b6585; border: 1px solid rgba(120, 200, 255, 0.10); }}
+QPushButton#tile {{ text-align: left; padding: 14px 16px; border-radius: 14px;
+    background: rgba(18, 26, 46, 0.85); border: 1px solid rgba(120, 200, 255, 0.14); }}
+QPushButton#tile:hover {{ border: 1px solid {CYAN}; background: rgba(34, 228, 255, 0.07); }}
+QPushButton#tile:pressed {{ background: rgba(61, 123, 255, 0.18); }}
+QPushButton#primary {{ color: #ffffff; font-weight: 600; border: 1px solid rgba(34, 228, 255, 0.5);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1fb8ff, stop:1 #3d6bff); }}
+QPushButton#primary:hover {{ border: 1px solid {CYAN};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4fd0ff, stop:1 #5a85ff); }}
+QPushButton#primary:disabled {{ background: #1c2540; color: #5b6585; border: 1px solid transparent; }}
+
+QCheckBox#stack {{ padding: 12px 14px; border-radius: 12px; background: rgba(18, 26, 46, 0.85);
+    border: 1px solid rgba(120, 200, 255, 0.14); spacing: 12px; }}
+QCheckBox#stack:hover {{ border: 1px solid rgba(34, 228, 255, 0.6); }}
+QCheckBox#stack:checked {{ border: 1px solid {CYAN}; background: rgba(61, 123, 255, 0.16); }}
+QCheckBox::indicator {{ width: 18px; height: 18px; border-radius: 5px;
+    border: 1px solid rgba(120, 200, 255, 0.4); background: #121a2e; }}
+QCheckBox::indicator:checked {{ border: 1px solid {CYAN};
+    background: qradialgradient(cx:0.5, cy:0.5, radius:0.6, fx:0.5, fy:0.5,
+                                stop:0 {CYAN}, stop:0.62 {CYAN}, stop:0.7 #121a2e); }}
+
+QPlainTextEdit {{ font-family: 'JetBrains Mono'; font-size: 9pt; border-radius: 12px; padding: 8px;
+    background: #070b16; border: 1px solid rgba(120, 200, 255, 0.14); color: #b9f3ff; }}
+QScrollBar:vertical {{ background: transparent; width: 10px; }}
+QScrollBar::handle:vertical {{ background: rgba(139, 149, 184, 0.35); border-radius: 5px; min-height: 30px; }}
+QScrollBar::handle:vertical:hover {{ background: rgba(34, 228, 255, 0.6); }}
+QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
 """
 
 # (название, описание, кто выполняет: root|user, команда)
@@ -92,6 +134,38 @@ def gpus() -> list[str]:
 
 def has_nvidia() -> bool:
     return any("NVIDIA" in g.upper() for g in gpus())
+
+
+def gpu_status(name: str) -> tuple[str, str]:
+    """Состояние драйвера видеокарты: (ok|warn|info, пояснение)."""
+    up = name.upper()
+    if re.search(r"VMWARE|VIRTUALBOX|QXL|BOCHS|VIRTIO|RED HAT|CIRRUS|HYPER-V", up):
+        return "info", "Виртуальная видеокарта — драйвер встроен в ядро"
+    if "NVIDIA" in up:
+        if Path("/proc/driver/nvidia/version").exists():
+            return "ok", "Фирменный драйвер NVIDIA работает"
+        return "warn", "Работает открытый драйвер; для игр и CUDA установите фирменный"
+    if re.search(r"AMD|ATI|RADEON|INTEL", up):
+        return "ok", "Открытый драйвер Mesa работает «из коробки»"
+    return "info", "Используется стандартный драйвер ядра"
+
+
+def card() -> tuple[QFrame, QVBoxLayout]:
+    """Карточка со скруглением и тонкой светящейся рамкой."""
+    frame = QFrame(objectName="card")
+    lay = QVBoxLayout(frame)
+    lay.setContentsMargins(18, 16, 18, 16)
+    lay.setSpacing(10)
+    return frame, lay
+
+
+def status_dot(kind: str) -> QLabel:
+    """Цветной индикатор состояния (не зависит от темы значков)."""
+    dot = QLabel()
+    dot.setFixedSize(12, 12)
+    color = STATUS_COLORS.get(kind, STATUS_COLORS["off"])
+    dot.setStyleSheet(f"background: {color}; border-radius: 6px; border: 2px solid rgba(255,255,255,0.18);")
+    return dot
 
 
 class Runner(QWidget):
@@ -218,7 +292,8 @@ class WelcomePage(QWidget):
         lay.addLayout(grid)
         lay.addSpacing(12)
 
-        lay.addWidget(heading("Горячие клавиши", "h2"))
+        keys_card, keys_lay = card()
+        keys_lay.addWidget(heading("Горячие клавиши", "h2"))
         keys = QLabel(
             "<table cellspacing=6>"
             "<tr><td><b>Meta+Space</b></td><td>Поиск приложений, файлов, калькулятор (как Spotlight)</td></tr>"
@@ -230,7 +305,8 @@ class WelcomePage(QWidget):
             "<tr><td><b>Print</b></td><td>Снимок экрана</td></tr>"
             "</table>")
         keys.setTextFormat(Qt.TextFormat.RichText)
-        lay.addWidget(keys)
+        keys_lay.addWidget(keys)
+        lay.addWidget(keys_card)
         lay.addStretch(1)
 
         self.show_cb = QCheckBox("Показывать это окно при входе в систему")
@@ -257,13 +333,26 @@ class DriversPage(QWidget):
             "AMD и Intel работают «из коробки» через открытые драйверы Mesa. "
             "Для NVIDIA рекомендуем фирменный драйвер — он даёт полную скорость в играх, "
             "CUDA и нейросетях."))
-        card = QFrame(objectName="card")
-        cl = QVBoxLayout(card)
+        gpu_card, cl = card()
         cl.addWidget(heading("Видеокарты в этом компьютере", "h2"))
-        found = gpus() or ["не удалось определить"]
+        found = gpus()
+        if not found:
+            cl.addWidget(muted("Не удалось определить видеокарту (нет lspci)."))
         for g in found:
-            cl.addWidget(QLabel("• " + g))
-        lay.addWidget(card)
+            kind, note = gpu_status(g)
+            row = QHBoxLayout()
+            row.setSpacing(12)
+            row.addWidget(status_dot(kind), 0, Qt.AlignmentFlag.AlignTop)
+            text = QVBoxLayout()
+            text.setSpacing(2)
+            name = QLabel(g)
+            name.setWordWrap(True)
+            name.setStyleSheet("font-weight: 600;")
+            text.addWidget(name)
+            text.addWidget(muted(note))
+            row.addLayout(text, 1)
+            cl.addLayout(row)
+        lay.addWidget(gpu_card)
 
         if LIVE:
             lay.addWidget(muted("<b>Вы в live-режиме.</b> Драйверы устанавливаются после установки "
@@ -305,16 +394,19 @@ class DevPage(QWidget):
             "Node.js, rustup, GCC/Clang, CMake, Neovim, lazygit</b>. "
             "Отметьте, что добавить, и нажмите «Установить»."))
 
+        # Сетка карточек-флажков: название и описание в две строки
         box = QWidget()
-        col = QVBoxLayout(box)
+        col = QGridLayout(box)
         col.setSpacing(10)
+        col.setContentsMargins(0, 4, 6, 4)
         self.checks: list[tuple[QCheckBox, tuple]] = []
-        for item in DEV_STACKS:
+        for i, item in enumerate(DEV_STACKS):
             name, desc, _who, _cmd = item
-            cb = QCheckBox(f"{name}  ·  {desc}")
-            col.addWidget(cb)
+            cb = QCheckBox(f"{name}\n{desc}", objectName="stack")
+            cb.setCursor(Qt.CursorShape.PointingHandCursor)
+            col.addWidget(cb, i // 2, i % 2)
             self.checks.append((cb, item))
-        col.addStretch(1)
+        col.setRowStretch(len(DEV_STACKS) // 2 + 1, 1)
         scroll = QScrollArea(widgetResizable=True)
         scroll.setFrameShape(QFrame.Shape.NoFrame)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
@@ -345,8 +437,11 @@ class SystemPage(QWidget):
         super().__init__()
         lay = QVBoxLayout(self)
         lay.addWidget(heading("О системе"))
-        card = QFrame(objectName="card")
-        grid = QGridLayout(card)
+        info = QFrame(objectName="card")
+        grid = QGridLayout(info)
+        grid.setContentsMargins(18, 16, 18, 16)
+        grid.setHorizontalSpacing(24)
+        grid.setVerticalSpacing(10)
         rows = [
             ("Система", self._os()),
             ("Ядро", platform.release()),
@@ -364,7 +459,8 @@ class SystemPage(QWidget):
             vl.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
             grid.addWidget(kl, i, 0, Qt.AlignmentFlag.AlignTop)
             grid.addWidget(vl, i, 1)
-        lay.addWidget(card)
+        grid.setColumnStretch(1, 1)
+        lay.addWidget(info)
         row = QHBoxLayout()
         for text, argv in (("Системный монитор", ("plasma-systemmonitor",)),
                            ("Информация о системе", ("kinfocenter",)),
@@ -417,7 +513,10 @@ class Center(QWidget):
         super().__init__()
         self.setWindowTitle("Центр AIsktagOS")
         self.setWindowIcon(QIcon.fromTheme("aisktagos-logo", QIcon(LOGO)))
-        self.resize(980, 700)
+        self.resize(1020, 720)
+        # Фон-градиент из STYLE (#root) рисуется только с этим атрибутом
+        self.setObjectName("root")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         self.runner = Runner()
         nav = QListWidget(objectName="nav")
@@ -429,10 +528,19 @@ class Center(QWidget):
         self.stack = QStackedWidget()
         for w in (WelcomePage(), DriversPage(self.runner), DevPage(self.runner), SystemPage()):
             self.stack.addWidget(w)
-        nav.currentRowChanged.connect(self.stack.setCurrentIndex)
+        # Плавное появление страницы при переключении
+        self.fade = QGraphicsOpacityEffect(self.stack)
+        self.fade.setOpacity(1.0)
+        self.stack.setGraphicsEffect(self.fade)
+        self.anim = QPropertyAnimation(self.fade, b"opacity", self)
+        self.anim.setDuration(240)
+        self.anim.setEasingCurve(QEasingCurve.Type.OutCubic)
+        # После анимации эффект выключаем: иначе страница всё время рисуется через буфер
+        self.anim.finished.connect(lambda: self.fade.setEnabled(False))
+        nav.currentRowChanged.connect(self._switch)
 
         right = QVBoxLayout()
-        right.setContentsMargins(20, 16, 20, 16)
+        right.setContentsMargins(26, 22, 26, 18)
         right.addWidget(self.stack, 1)
         right.addWidget(self.runner)
         root = QHBoxLayout(self)
@@ -441,6 +549,14 @@ class Center(QWidget):
         root.addWidget(nav)
         root.addLayout(right, 1)
         nav.setCurrentRow(self.PAGES.index(page) if page in self.PAGES else 0)
+
+    def _switch(self, index: int) -> None:
+        self.stack.setCurrentIndex(index)
+        self.anim.stop()
+        self.fade.setEnabled(True)
+        self.anim.setStartValue(0.0)
+        self.anim.setEndValue(1.0)
+        self.anim.start()
 
 
 def main() -> int:

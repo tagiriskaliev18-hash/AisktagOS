@@ -1,0 +1,24 @@
+[Desktop Entry]
+Name=AIsktagOS Glass
+Comment=Стеклянные панели AIsktagOS: строка меню и плавающий док
+X-KDE-PluginInfo-Author=AIsktagOS
+X-KDE-PluginInfo-Name=AIsktagOS
+X-KDE-PluginInfo-Version=2.0
+X-KDE-PluginInfo-License=GPL-2.0-or-later
+X-KDE-PluginInfo-EnabledByDefault=true
+X-Plasma-API=5.0
+
+[Settings]
+FallbackTheme=breeze-dark
+
+[ContrastEffect]
+enabled=true
+contrast=0.85
+intensity=0.9
+saturation=1.9
+
+[AdaptiveTransparency]
+enabled=true
+
+[BlurBehindEffect]
+enabled=true
