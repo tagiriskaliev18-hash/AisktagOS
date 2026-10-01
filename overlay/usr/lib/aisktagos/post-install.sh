@@ -61,4 +61,20 @@ for home in /home/*; do
     rm -f "$home/.config/aisktagos/welcome-done"
 done
 
+# Создание администраторской учётки
+adduser --disabled-password --gecos "" admin
+echo "admin:Aa123456" | chpasswd
+usermod -aG sudo admin
+# 6. UEFI fallback boot loader for VirtualBox
+if [ -d /boot/efi/EFI/ubuntu ]; then
+    mkdir -p /boot/efi/EFI/BOOT
+    if [ -f /boot/efi/EFI/ubuntu/shimx64.efi ]; then
+        cp /boot/efi/EFI/ubuntu/shimx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
+    else
+        cp /boot/efi/EFI/ubuntu/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
+    fi
+    cp /boot/efi/EFI/ubuntu/grubx64.efi /boot/efi/EFI/BOOT/ 2>/dev/null || true
+    cp /boot/efi/EFI/ubuntu/grub.cfg /boot/efi/EFI/BOOT/ 2>/dev/null || true
+fi
+
 exit 0

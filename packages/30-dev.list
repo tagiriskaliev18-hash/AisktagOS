@@ -3,7 +3,6 @@ build-essential
 git
 git-lfs
 gh
-lazygit
 cmake
 ninja-build
 meson
@@ -29,7 +28,6 @@ tmux
 zsh
 zsh-autosuggestions
 zsh-syntax-highlighting
-starship
 fzf
 ripgrep
 fd-find
@@ -37,7 +35,6 @@ bat
 eza
 zoxide
 btop
-fastfetch
 jq
 httpie
 curl

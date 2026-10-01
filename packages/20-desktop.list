@@ -1,7 +1,7 @@
 # Рабочий стол KDE Plasma 6 (Wayland) + приложения
 kde-plasma-desktop
 plasma-workspace
-plasma-session-x11
+
 kwin-wayland
 kwin-addons
 sddm
