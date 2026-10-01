@@ -1468,6 +1468,9 @@ class ProcessesPage(QWidget):
         self._update_downloads(downloads)
         self.refresh_view(tick=True)
         self.last_poll_ms = (time.perf_counter() - t0) * 1000
+        # Под сильной нагрузкой или при тысячах процессов опрос дорожает — реже опрашиваем,
+        # чтобы сама страница занимала не больше ~2% одного ядра (но не реже раза в 8 с)
+        self.timer.setInterval(int(min(8000, max(POLL_MS, self.last_poll_ms * 50))))
 
     def _update_downloads(self, downloads: dict) -> None:
         for k in [k for k in self.dl_rows if k not in downloads]:
