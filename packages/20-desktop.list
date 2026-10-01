@@ -59,5 +59,7 @@ gstreamer1.0-plugins-bad
 gstreamer1.0-plugins-ugly
 # Для собственных утилит AIsktagOS
 python3-pyqt6
+# SVG-значки в Qt 6 (Центр AIsktagOS): без модуля iconengines/libqsvgicon значки темы не рисуются
+libqt6svg6
 python3-dbus
 kdialog
