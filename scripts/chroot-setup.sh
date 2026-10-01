@@ -127,6 +127,36 @@ chmod +x /usr/bin/aisktag-* /usr/lib/aisktagos/*.sh /usr/lib/aisktagos/*.py /etc
 # Тёмная тема по умолчанию: цвета Breeze Dark + настройки AIsktagOS
 { cat /usr/share/color-schemes/BreezeDark.colors; echo; cat /usr/share/aisktagos/kdeglobals.aisktagos; } > /etc/xdg/kdeglobals
 
+# --- Объёмные значки WhiteSur (в духе macOS) -----------------------------------
+# https://github.com/vinceliuice/WhiteSur-icon-theme, GPL-3.0. Версия закреплена тегом,
+# подлинность проверяется по хэшу коммита (git проверяет целостность всех объектов).
+# Ставим WhiteSur-dark и базовую WhiteSur (на неё ссылаются символьные ссылки тёмного
+# варианта): ~40 МБ, ~5 МБ в squashfs. Если загрузка не удалась, остаётся Papirus-Dark.
+WHITESUR_TAG="2026-09-10"
+WHITESUR_COMMIT="73d8040da51a9ed74e47c7366e7e9ff437601a5c"
+install_whitesur() {
+    local tmp rc
+    tmp=$(mktemp -d)
+    git clone -q --depth 1 --branch "$WHITESUR_TAG" \
+        https://github.com/vinceliuice/WhiteSur-icon-theme.git "$tmp/ws" &&
+    [ "$(git -C "$tmp/ws" rev-parse HEAD)" = "$WHITESUR_COMMIT" ] &&
+    # -p: логотип KDE вместо логотипа Apple; -t default: синий акцент
+    (cd "$tmp/ws" && ./install.sh -d /usr/share/icons -t default -p) &&
+    test -f /usr/share/icons/WhiteSur-dark/index.theme
+    rc=$?
+    rm -rf "$tmp" /usr/share/icons/WhiteSur-light
+    return "$rc"
+}
+if install_whitesur; then
+    gtk-update-icon-cache -f /usr/share/icons/WhiteSur || true
+    gtk-update-icon-cache -f /usr/share/icons/WhiteSur-dark || true
+else
+    echo "ВНИМАНИЕ: тема значков WhiteSur недоступна, остаётся Papirus-Dark"
+    rm -rf /usr/share/icons/WhiteSur /usr/share/icons/WhiteSur-dark
+    sed -i 's/^Theme=WhiteSur-dark$/Theme=Papirus-Dark/' /etc/xdg/kdeglobals \
+        /usr/share/plasma/look-and-feel/org.aisktagos.desktop/contents/defaults
+fi
+
 # Пакет grub-efi-amd64 для установщика: на UEFI-машинах он заменит grub-pc
 mkdir -p /usr/share/aisktagos/debs
 (cd /usr/share/aisktagos/debs && apt-get download grub-efi-amd64)

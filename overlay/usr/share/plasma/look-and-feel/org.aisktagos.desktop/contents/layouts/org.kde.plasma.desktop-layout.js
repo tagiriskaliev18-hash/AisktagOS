@@ -16,7 +16,29 @@ menu.writeConfig("favoritesPortedToKAstats", true);
 // Глобальное меню активного приложения
 menuBar.addWidget("org.kde.plasma.appmenu");
 menuBar.addWidget("org.kde.plasma.panelspacer");
-menuBar.addWidget("org.kde.plasma.systemtray");
+
+// Мини-монитор нагрузки процессора: лёгкий график (датчики ksystemstats,
+// обновление раз в 2 с). В Plasma 5.27/6 действие по щелчку у него не
+// переназначается — щелчок раскрывает подробный график; полный список процессов
+// открывается из Центра AIsktagOS (aisktag-welcome --page processes).
+if (knownWidgetTypes.indexOf("org.kde.plasma.systemmonitor.cpu") >= 0) {
+    menuBar.addWidget("org.kde.plasma.systemmonitor.cpu");
+}
+
+var systrayApplet = menuBar.addWidget("org.kde.plasma.systemtray");
+// Значки лотка живут во внутреннем контейнере (так и в Plasma 5.27, и в 6):
+// уведомления и задачи (прогресс загрузок и копирования) — всегда на виду
+var systrayId = systrayApplet.readConfig("SystrayContainmentId");
+var systray = systrayId ? desktopById(systrayId) : null;
+if (systray) {
+    systray.currentConfigGroup = ["General"];
+    systray.writeConfig("shownItems", [
+        "org.kde.plasma.notifications",
+        "org.kde.plasma.networkmanagement",
+        "org.kde.plasma.volume",
+        "org.kde.plasma.battery"
+    ]);
+}
 
 var clock = menuBar.addWidget("org.kde.plasma.digitalclock");
 clock.currentConfigGroup = ["Appearance"];
@@ -27,11 +49,20 @@ clock.writeConfig("dateFormat", "shortDate");
 // ---- Док ------------------------------------------------------------------
 var dock = new Panel;
 dock.location = "bottom";
-dock.height = Math.round(gridUnit * 3.4);
-dock.floating = true;
+// Значки покрупнее: ~64 px при стандартном шрифте
+dock.height = Math.round(gridUnit * 3.8);
 dock.alignment = "center";
-dock.lengthMode = "fit";
 dock.hiding = "dodgewindows";
+// Свойства floating (плавающая панель, Plasma 5.25+) и lengthMode (длина по
+// содержимому, только Plasma 6) задаём, лишь если они есть у панели: в 5.27
+// lengthMode нет, и док центрируется через alignment на всю длину края.
+// minimumLength/maximumLength не задаём: в 5.27 они фиксировали бы длину в пикселях.
+if ("floating" in dock) {
+    dock.floating = true;
+}
+if ("lengthMode" in dock) {
+    dock.lengthMode = "fit";
+}
 
 // Все приложения на весь экран (аналог Launchpad)
 var launchpad = dock.addWidget("org.kde.plasma.kickerdash");
@@ -63,6 +94,14 @@ tasks.currentConfigGroup = ["General"];
 tasks.writeConfig("launchers", launchers);
 tasks.writeConfig("indicateAudioStreams", true);
 tasks.writeConfig("iconSpacing", 2);
+// Индикаторы и прогресс на значках: полоса прогресса из Job API (загрузки,
+// копирование) и счётчики (LauncherEntry), подсветка окна при наведении,
+// приложение, требующее внимания, показывает скрытый док
+tasks.writeConfig("smartLaunchersEnabled", true);
+tasks.writeConfig("highlightWindows", true);
+tasks.writeConfig("showToolTips", true);
+tasks.writeConfig("unhideOnAttention", true);
+tasks.writeConfig("maxStripes", 1);
 
 dock.addWidget("org.kde.plasma.marginsseparator");
 dock.addWidget("org.kde.plasma.trash");

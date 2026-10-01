@@ -93,6 +93,13 @@ python3 tools/test-vm.py sh dbg aisktag              # вход live-польз�
 8. У Kubuntu squashfs слоёный, у нас один слой: casper/calamares удаляет модуль `packages`, остатки live — `post-install.sh`.
 9. `Calamares` на Ubuntu ставит GRUB в `EFI/ubuntu` (так требует подписанный GRUB), поэтому `efiBootloaderId: "ubuntu"`.
 10. В песочнице без доступа к packages.mozilla.org вместо Firefox ставится Falkon. На GitHub Actions Firefox ставится нормально.
+11. Значки — WhiteSur-dark (тег и хэш коммита закреплены в `chroot-setup.sh`, клон проверяется по `git rev-parse HEAD`). Нет сети или не совпал коммит — остаётся Papirus-Dark (sed в `/etc/xdg/kdeglobals` и `defaults` look-and-feel). Обновляя тег, возьмите коммит из `git ls-remote <репозиторий> refs/tags/<тег>`.
+12. Без `renderD*` и в любой ВМ (`systemd-detect-virt --vm`) `aisktagos-render.sh` один раз отключает в пользовательских kwinrc/kdeglobals размытие, контраст и укорачивает анимации (метка `~/.config/aisktagos-lowgfx`); на настоящем ПК с ускорением значения удаляются и снова действуют умолчания `/etc/xdg`.
+13. В layout.js у Plasma 5.27 нет `panel.lengthMode` (только Plasma 6) — такие свойства панели проверяются через `in`.
+14. База — Ubuntu 24.04 «noble» (Plasma 5.27). Там `plasma.desktop` — X11-сеанс, `plasmawayland.desktop` — Wayland; в Plasma 6 наоборот (`plasmax11.desktop` — X11). SDDM держим в X11: Wayland-greeter запускает X11-сеанс через Xorg без root, в VirtualBox это давало чёрный экран.
+15. Меню загрузки без `quiet splash` (`loglevel=3 systemd.show_status=true`): пользователь должен видеть ход загрузки. Calamares запускается с `-d` — кнопка живого журнала установки.
+16. VirtualBox: VMSVGA и **3D-ускорение выключено** — с 3D рабочий стол KDE часто остаётся чёрным.
+17. Перед коммитом `bash -n` для всех скриптов: однажды в `aisktag-install` попала склеенная строка (`fi$WAYLAND_DISPLAY …`), и установщик не запускался вовсе.
 
 ## Что делать дальше (приоритеты)
 
