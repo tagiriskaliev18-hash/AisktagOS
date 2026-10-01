@@ -121,6 +121,7 @@ find /usr/share/doc -type d -empty -delete
 
 # --- Файлы AIsktagOS --------------------------------------------------------------
 cp -a "$B/overlay/." /
+chmod 600 /etc/netplan/*.yaml
 chmod +x /usr/bin/aisktag-* /usr/lib/aisktagos/*.sh /usr/lib/aisktagos/*.py /etc/xdg/plasma-workspace/env/*.sh 2>/dev/null || true
 
 # Тёмная тема по умолчанию: цвета Breeze Dark + настройки AIsktagOS
@@ -132,6 +133,8 @@ mkdir -p /usr/share/aisktagos/debs
 
 # Идентификация системы (как в Linux Mint: ID_LIKE=ubuntu, совместимость с PPA и драйверами)
 dpkg-divert --local --rename --add /usr/lib/os-release
+# Номер релиза Ubuntu берём из оригинального os-release (после divert он лежит в .distrib)
+UBUNTU_RELEASE="$(. /usr/lib/os-release.distrib && echo "$VERSION_ID")"
 cat > /usr/lib/os-release <<EOF
 PRETTY_NAME="${OS_NAME} ${OS_VERSION} (${OS_CODENAME})"
 NAME="${OS_NAME}"
@@ -156,7 +159,7 @@ echo "${OS_NAME} ${OS_VERSION}" > /etc/issue.net
 # Кодовое имя остаётся от Ubuntu — для совместимости с PPA и сторонними репозиториями
 cat > /etc/lsb-release <<EOF
 DISTRIB_ID=Ubuntu
-DISTRIB_RELEASE=26.04
+DISTRIB_RELEASE=${UBUNTU_RELEASE}
 DISTRIB_CODENAME=${UBUNTU_SUITE}
 DISTRIB_DESCRIPTION="${OS_NAME} ${OS_VERSION} (${OS_CODENAME})"
 EOF

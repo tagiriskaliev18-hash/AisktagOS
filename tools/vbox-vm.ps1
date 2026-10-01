@@ -3,9 +3,9 @@
     [string]$Action = "status",
     [string]$VmName = "AIsktagOS",
     [string]$IsoPath = "$PSScriptRoot\..\out\aisktagos-1.0-amd64.iso",
-    [int]$MemoryMb = 2560,
+    [int]$MemoryMb = 4096,
     [int]$CpuCount = 2,
-    [int]$DiskSizeMb = 25600
+    [int]$DiskSizeMb = 40960
 )
 
 $VBoxManage = "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe"
@@ -44,12 +44,14 @@ switch ($Action) {
             }
         }
 
+        # 3D-ускорение выключено: с VMSVGA + 3D VirtualBox часто показывает только чёрный
+        # экран после запуска рабочего стола KDE. Без него рабочий стол рисуется программно.
         Invoke-VBox @("modifyvm", $VmName,
             "--memory", $MemoryMb,
             "--cpus", $CpuCount,
             "--vram", "128",
             "--graphicscontroller", "vmsvga",
-            "--accelerate-3d", "on",
+            "--accelerate-3d", "off",
             "--mouse", "usbtablet",
             "--clipboard-mode", "bidirectional",
             "--drag-and-drop", "bidirectional",
@@ -71,7 +73,7 @@ switch ($Action) {
             "--clipboard-mode", "bidirectional",
             "--drag-and-drop", "bidirectional",
             "--graphicscontroller", "vmsvga",
-            "--accelerate-3d", "on",
+            "--accelerate-3d", "off",
             "--audio-enabled", "on",
             "--audio-out", "on"
         )
