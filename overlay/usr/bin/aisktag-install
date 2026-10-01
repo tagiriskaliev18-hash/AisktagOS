@@ -1,12 +1,20 @@
 #!/usr/bin/env bash
 # Запуск установщика AIsktagOS (Calamares) с правами администратора.
-# В live-сессии sudo работает без пароля. sudo-rs в Ubuntu 26.04 не поддерживает «sudo -E»,
+# В live-сессии sudo работает без пароля. sudo-rs (Ubuntu 26.04) не поддерживает «sudo -E»,
 # поэтому переменные, нужные для доступа к экрану (Wayland или X11), передаются явно.
+# Root и так может открыть сокет Wayland пользователя, а для X11 нужен xhost.
 if pgrep -x calamares >/dev/null; then
     exit 0
 fi
-if [ -n $WAYLAND_DISPLAY ] && [ -n $XDG_RUNTIME_DIR ]; then sudo chmod 0777 $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY 2>/dev/null || true; xhost +SI:localuser:root 2>/dev/null || true; fi$WAYLAND_DISPLAY ] && [ -n $XDG_RUNTIME_DIR ]; then sudo chmod 0777 $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY || true; fi
-exec sudo env \
+
+if [ -n "${DISPLAY:-}" ] && command -v xhost >/dev/null; then
+    xhost +SI:localuser:root >/dev/null 2>&1 || true
+fi
+
+# -d: в окне установщика появляется кнопка «Показать отладочную информацию» —
+# живой журнал всех шагов установки, чтобы было видно, что происходит прямо сейчас.
+# Полный журнал также пишется в /root/.cache/calamares/session.log.
+sudo env \
     WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
     DISPLAY="${DISPLAY:-}" \
     XAUTHORITY="${XAUTHORITY:-}" \
@@ -19,4 +27,18 @@ exec sudo env \
     LANG="${LANG:-C.UTF-8}" \
     LANGUAGE="${LANGUAGE:-}" \
     HOME=/root XDG_CONFIG_HOME=/root/.config XDG_CACHE_HOME=/root/.cache \
-    calamares "$@"
+    calamares -d "$@"
+rc=$?
+
+# Установщик не открылся или упал — не оставляем пользователя перед пустым экраном
+if [ "$rc" -ne 0 ]; then
+    msg="Установщик завершился с ошибкой (код $rc).
+Журнал: /root/.cache/calamares/session.log
+Запустите установку ещё раз значком «Установить AIsktagOS» на рабочем столе."
+    if command -v kdialog >/dev/null; then
+        kdialog --title "Установка AIsktagOS" --error "$msg"
+    else
+        echo "$msg" >&2
+    fi
+fi
+exit "$rc"

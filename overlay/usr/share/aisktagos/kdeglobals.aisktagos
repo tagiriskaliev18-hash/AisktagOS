@@ -14,7 +14,7 @@ accentColorFromWallpaper=false
 activeFont=Inter,10,-1,5,600,0,0,0,0,0,0,0,0,0,0,1
 
 [Icons]
-Theme=Papirus-Dark
+Theme=WhiteSur-dark
 
 [KDE]
 LookAndFeelPackage=org.aisktagos.desktop

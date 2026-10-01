@@ -3,6 +3,8 @@ Description=AIsktagOS: подключение магазина приложен�
 Wants=network-online.target
 After=network-online.target
 ConditionPathExists=!/var/lib/flatpak/repo/flathub.trustedkeys.gpg
+# В live-сессии (USB/DVD) ничего не скачиваем — только в установленной системе
+ConditionKernelCommandLine=!boot=casper
 
 [Service]
 Type=oneshot

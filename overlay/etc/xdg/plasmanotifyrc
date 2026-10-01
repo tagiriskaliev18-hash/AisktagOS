@@ -1,0 +1,9 @@
+# AIsktagOS: прогресс задач (загрузки, копирование, установка) всегда на виду —
+# во всплывающем окне до завершения, в лотке и на значке приложения в доке
+[Jobs]
+InNotifications=true
+InTaskManager=true
+PermanentPopups=true
+
+[Badges]
+InTaskManager=true

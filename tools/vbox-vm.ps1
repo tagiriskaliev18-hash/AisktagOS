@@ -3,15 +3,24 @@
     [string]$Action = "status",
     [string]$VmName = "AIsktagOS",
     [string]$IsoPath = "$PSScriptRoot\..\out\aisktagos-1.0-amd64.iso",
-    [int]$MemoryMb = 2560,
+    [int]$MemoryMb = 4096,
     [int]$CpuCount = 2,
-    [int]$DiskSizeMb = 25600
+    [int]$DiskSizeMb = 40960
 )
 
 $VBoxManage = "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe"
 if (-not (Test-Path $VBoxManage)) {
     Write-Error "VirtualBox not found at: $VBoxManage"
     exit 1
+}
+
+# Если в Windows работает Hyper-V, VirtualBox запускает ВМ через него (зелёная черепаха
+# в строке состояния) в 10–20 раз медленнее: загрузка выглядит зависшей на строках systemd.
+$HypervisorOn = $false
+try { $HypervisorOn = (Get-CimInstance Win32_ComputerSystem).HypervisorPresent } catch {}
+if ($HypervisorOn -and $Action -in @("setup", "start")) {
+    Write-Warning "Hyper-V is active: VirtualBox will run this VM very slowly (green turtle icon). Boot may take 10-15 minutes."
+    Write-Warning "To fix (as Administrator): bcdedit /set hypervisorlaunchtype off; turn off Core isolation > Memory integrity; reboot Windows."
 }
 
 $ResolvedIso = (Resolve-Path $IsoPath -ErrorAction SilentlyContinue).Path
@@ -44,12 +53,14 @@ switch ($Action) {
             }
         }
 
+        # 3D-ускорение выключено: с VMSVGA + 3D VirtualBox часто показывает только чёрный
+        # экран после запуска рабочего стола KDE. Без него рабочий стол рисуется программно.
         Invoke-VBox @("modifyvm", $VmName,
             "--memory", $MemoryMb,
             "--cpus", $CpuCount,
             "--vram", "128",
             "--graphicscontroller", "vmsvga",
-            "--accelerate-3d", "on",
+            "--accelerate-3d", "off",
             "--mouse", "usbtablet",
             "--clipboard-mode", "bidirectional",
             "--drag-and-drop", "bidirectional",
@@ -71,7 +82,7 @@ switch ($Action) {
             "--clipboard-mode", "bidirectional",
             "--drag-and-drop", "bidirectional",
             "--graphicscontroller", "vmsvga",
-            "--accelerate-3d", "on",
+            "--accelerate-3d", "off",
             "--audio-enabled", "on",
             "--audio-out", "on"
         )
