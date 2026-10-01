@@ -102,6 +102,7 @@ python3 tools/test-vm.py sh dbg aisktag              # вход live-польз�
 17. Перед коммитом `bash -n` для всех скриптов: однажды в `aisktag-install` попала склеенная строка (`fi$WAYLAND_DISPLAY …`), и установщик не запускался вовсе.
 18. Зелёная черепаха в строке состояния VirtualBox — Windows с Hyper-V (VirtualBox работает через NEM в 10–20 раз медленнее). Загрузка «замирает» на строках `Starting …`, хотя система жива. Лечится `bcdedit /set hypervisorlaunchtype off` и выключением «Целостности памяти»; `tools/vbox-vm.ps1` предупреждает об этом.
 19. В тестовом QEMU запускайте ВМ с `VGA=std`: при `-vga vmware` vmwgfx выкидывает simpledrm и сам не загружается («unsupported hypervisor», «no pitchlock»), `/dev/dri` нет, logind пишет `CanGraphical=no`, и SDDM ждёт вечно. Это особенность QEMU, не системы.
+20. Проверка интернета в Calamares (`welcome.conf`, `internetCheckUrl`) считает пустой ответ отсутствием сети. `connectivity-check.ubuntu.com` отвечает 204 без тела, поэтому нужны адреса, которые возвращают текст (networkcheck.kde.org и др.).
 
 ## Что делать дальше (приоритеты)
 
