@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Процессы AIsktagOS
+Name[en]=AIsktagOS Processes
+GenericName=Запущенные программы и загрузки
+GenericName[en]=Running apps & downloads
+Comment=Все процессы, загрузка процессора и памяти, что сейчас скачивается
+Comment[en]=All processes, CPU and memory usage, current downloads
+Exec=aisktag-welcome --page processes
+Icon=utilities-system-monitor
+Terminal=false
+Categories=Qt;KDE;System;Monitor;
+Keywords=process;task;manager;monitor;cpu;memory;download;процессы;диспетчер;задачи;загрузки;память;
