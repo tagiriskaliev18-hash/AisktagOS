@@ -1625,6 +1625,24 @@ class Center(QWidget):
         nav.setCurrentRow(self.PAGES.index(page) if page in self.PAGES else 0)
 
 
+def kde_icon_theme() -> str:
+    """Тема значков из настроек KDE (сначала пользовательских, потом системных)."""
+    cfg = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    for f in (cfg / "kdeglobals", Path("/etc/xdg/kdeglobals")):
+        try:
+            text = f.read_text(errors="replace")
+        except OSError:
+            continue
+        group = ""
+        for line in text.splitlines():
+            line = line.strip()
+            if line.startswith("["):
+                group = line
+            elif group == "[Icons]" and line.startswith("Theme="):
+                return line.split("=", 1)[1].strip()
+    return ""
+
+
 def main() -> int:
     args = sys.argv[1:]
     page = "welcome"
@@ -1639,6 +1657,12 @@ def main() -> int:
     app.setApplicationName("aisktag-center")
     app.setDesktopFileName("aisktag-welcome")
     app.setStyleSheet(STYLE)
+    # Центр написан на Qt 6, а модуль интеграции Plasma 5.27 — только для Qt 5, поэтому без
+    # подсказки Qt 6 берёт значки из hicolor и почти все иконки превращаются в буквы
+    theme = kde_icon_theme()
+    if theme and QIcon.themeName() in ("", "hicolor") and theme != QIcon.themeName():
+        QIcon.setThemeName(theme)
+    QIcon.setFallbackThemeName("breeze")
     w = Center(page)
     w.show()
     return app.exec()
