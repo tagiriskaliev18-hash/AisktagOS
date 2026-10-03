@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=VirtualBox guest
+Comment=Разрешение и буфер обмена VirtualBox; на обычном ПК не запускается
+Exec=/usr/lib/aisktagos/vbox-guest.sh
+NoDisplay=true
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=1

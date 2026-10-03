@@ -34,6 +34,10 @@ language-pack-en
 hunspell-ru
 hunspell-en-us
 btrfs-progs
+# Нужны и в live, и после установки: Calamares умеет LUKS/LVM, mdadm собирает RAID
+cryptsetup
+lvm2
+mdadm
 dosfstools
 exfatprogs
 ntfs-3g

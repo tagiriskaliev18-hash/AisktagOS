@@ -61,16 +61,97 @@ for home in /home/*; do
     rm -f "$home/.config/aisktagos/welcome-done"
 done
 
-# 6. UEFI fallback boot loader for VirtualBox
-if [ -d /boot/efi/EFI/ubuntu ]; then
-    mkdir -p /boot/efi/EFI/BOOT
-    if [ -f /boot/efi/EFI/ubuntu/shimx64.efi ]; then
-        cp /boot/efi/EFI/ubuntu/shimx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
+# 6. Запасной путь EFI/BOOT/BOOTX64.EFI.
+# Часть прошивок не читает загрузочную запись NVRAM и грузит только этот файл
+# (дешёвые платы, некоторые ноутбуки, виртуальные машины). Подписанный shim — первым.
+src=/boot/efi/EFI/ubuntu
+dst=/boot/efi/EFI/BOOT
+if [ -d "$src" ]; then
+    mkdir -p "$dst"
+    if [ -f "$src/shimx64.efi" ]; then
+        cp -f "$src/shimx64.efi" "$dst/BOOTX64.EFI"
+    elif [ -f "$src/grubx64.efi" ]; then
+        cp -f "$src/grubx64.efi" "$dst/BOOTX64.EFI"
     else
-        cp /boot/efi/EFI/ubuntu/grubx64.efi /boot/efi/EFI/BOOT/BOOTX64.EFI
+        log "EFI: в $src нет shimx64.efi и grubx64.efi"
     fi
-    cp /boot/efi/EFI/ubuntu/grubx64.efi /boot/efi/EFI/BOOT/ 2>/dev/null || true
-    cp /boot/efi/EFI/ubuntu/grub.cfg /boot/efi/EFI/BOOT/ 2>/dev/null || true
+    [ -f "$src/grubx64.efi" ] && cp -f "$src/grubx64.efi" "$dst/grubx64.efi"
+    [ -f "$src/grub.cfg" ] && cp -f "$src/grub.cfg" "$dst/grub.cfg"
+    [ -f "$src/mmx64.efi" ] && cp -f "$src/mmx64.efi" "$dst/mmx64.efi"
+    log "EFI fallback: $dst"
+fi
+
+# 7. Экран входа читает /etc/default/keyboard. Установщик записывает одну раскладку,
+# из-за этого SDDM остаётся только с ru или только с us. Пара us+ru и Alt+Shift —
+# как в live-сессии; чужую выбранную раскладку не выбрасываем, а добавляем us.
+kb=/etc/default/keyboard
+if [ -f "$kb" ]; then
+    kb_get() {
+        _val="$(grep "^${1}=" "$kb" | head -1 | cut -d= -f2-)"
+        _val="${_val#\"}"
+        _val="${_val%\"}"
+        printf '%s' "$_val"
+    }
+    kb_set() {
+        if grep -q "^${1}=" "$kb"; then
+            sed -i "s|^${1}=.*|${1}=\"${2}\"|" "$kb"
+        else
+            printf '%s="%s"\n' "$1" "$2" >> "$kb"
+        fi
+    }
+    layout="$(kb_get XKBLAYOUT)"
+    variant="$(kb_get XKBVARIANT)"
+    options="$(kb_get XKBOPTIONS)"
+    layout="${layout:-us}"
+    case "$layout" in
+        *,*) ;;
+        ru)
+            layout="us,ru"
+            case "$variant" in
+                *,*) ;;
+                "") variant="," ;;
+                *) variant=",${variant}" ;;
+            esac
+            ;;
+        us)
+            layout="us,ru"
+            case "$variant" in
+                *,*) ;;
+                "") variant="," ;;
+                *) variant="${variant}," ;;
+            esac
+            ;;
+        *)
+            layout="${layout},us"
+            case "$variant" in
+                *,*) ;;
+                "") variant="," ;;
+                *) variant="${variant}," ;;
+            esac
+            ;;
+    esac
+    case ",${options}," in
+        *,grp:alt_shift_toggle,*) ;;
+        *)
+            if [ -n "$options" ]; then
+                options="${options},grp:alt_shift_toggle"
+            else
+                options="grp:alt_shift_toggle"
+            fi
+            ;;
+    esac
+    kb_set XKBLAYOUT "$layout"
+    kb_set XKBVARIANT "$variant"
+    kb_set XKBOPTIONS "$options"
+    xorg=/etc/X11/xorg.conf.d/00-keyboard.conf
+    if [ -f "$xorg" ]; then
+        sed -i \
+            -e "s|Option \"XkbLayout\" \".*\"|Option \"XkbLayout\" \"${layout}\"|" \
+            -e "s|Option \"XkbVariant\" \".*\"|Option \"XkbVariant\" \"${variant}\"|" \
+            -e "s|Option \"XkbOptions\" \".*\"|Option \"XkbOptions\" \"${options}\"|" \
+            "$xorg"
+    fi
+    log "клавиатура: ${layout} (${options})"
 fi
 
 exit 0

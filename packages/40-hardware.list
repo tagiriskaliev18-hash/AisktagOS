@@ -7,7 +7,11 @@ vulkan-tools
 mesa-utils
 intel-media-va-driver
 ubuntu-drivers-common
-# Гостевые дополнения для виртуальных машин (VMware, VirtualBox, QEMU/KVM, Hyper-V)
+# Гостевые агенты. На физическом ПК они не подменяют видеодрайвер:
+# qemu-guest-agent ждёт virtio-порт, open-vm-tools завершается вне VMware,
+# virtualbox-guest-x11 не кладёт xorg.conf (только Xsession и VBoxClient).
+# В Wayland VBoxClient запускает overlay/usr/lib/aisktagos/vbox-guest.sh,
+# и только если есть устройство vboxguest.
 open-vm-tools-desktop
 spice-vdagent
 qemu-guest-agent

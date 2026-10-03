@@ -184,9 +184,11 @@ sed -i 's|^#\?SHELL=.*|SHELL=/usr/bin/zsh|' /etc/default/useradd
 # --- Службы -------------------------------------------------------------------
 systemctl enable NetworkManager sddm aisktagos-flathub.service
 systemctl set-default graphical.target
-# Сетью управляет NetworkManager; ожидание systemd-networkd (если его притянул netplan)
-# только задерживает загрузку до 2 минут «A start job is running for Wait for Network…»
+# Сетью управляет NetworkManager. Ожидание сети перед рабочим столом на ноутбуке
+# без Wi-Fi и в виртуальной машине добавляет десятки секунд и больше.
 systemctl mask systemd-networkd-wait-online.service || true
+systemctl disable NetworkManager-wait-online.service || true
+systemctl mask NetworkManager-wait-online.service || true
 # Docker запускается по первому обращению — не тормозит загрузку
 systemctl disable docker.service || true
 systemctl enable docker.socket || true
