@@ -1,9 +1,11 @@
 ---
 componentName: aisktagos
 
-# Окно-мастер по центру экрана, как установщик Windows
+# Окно-мастер по центру экрана, как установщик Windows.
+# 880×520 помещается на 1366×768 и на 1024×640 (меню сверху и док снизу),
+# не растягиваясь на весь 4K-монитор.
 windowExpanding: normal
-windowSize: 1024px,680px
+windowSize: 880px,520px
 windowPlacement: center
 sidebar: widget
 navigation: widget
