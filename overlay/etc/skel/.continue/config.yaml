@@ -1,0 +1,21 @@
+# Continue (расширение VS Code/JetBrains) уже настроено на локальную модель AIsktagOS Mind.
+# Установка расширения: Центр AIsktagOS → «ИИ» → «Подключить к VS Code» или `code --install-extension Continue.continue`.
+name: AIsktagOS Mind
+version: 1.0.0
+schema: v1
+models:
+  - name: Mind (локальная)
+    provider: openai
+    model: aisktag-mind
+    apiBase: http://127.0.0.1:6573/v1
+    apiKey: aisktag-local
+    roles:
+      - chat
+      - edit
+      - apply
+  - name: Mind автодополнение
+    provider: llama.cpp
+    model: aisktag-mind
+    apiBase: http://127.0.0.1:6573
+    roles:
+      - autocomplete

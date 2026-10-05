@@ -1,5 +1,16 @@
 [services][org.kde.krunner.desktop]
-_launch=Meta+Space\tAlt+Space\tAlt+F2\tSearch,Alt+Space\tAlt+F2\tSearch,KRunner
+_launch=Meta+Space\tAlt+Space\tAlt+F2\tMeta+R,Alt+Space\tAlt+F2\tSearch,KRunner
+
+[services][org.kde.dolphin.desktop]
+_launch=Meta+E
+
+[services][kitty.desktop]
+_launch=Ctrl+Alt+T\tMeta+Return
+
+[services][aisktag-mind.desktop]
+_launch=Meta+A
 
 [kwin]
-Overview=Meta+W\tMeta+Tab,Meta+W,Overview
+Overview=Meta+Tab\tMeta+W,Meta+W,Overview
+Switch One Desktop to the Left=Ctrl+Alt+Left\tMeta+Ctrl+Left,Meta+Ctrl+Left,Switch One Desktop to the Left
+Switch One Desktop to the Right=Ctrl+Alt+Right\tMeta+Ctrl+Right,Meta+Ctrl+Right,Switch One Desktop to the Right

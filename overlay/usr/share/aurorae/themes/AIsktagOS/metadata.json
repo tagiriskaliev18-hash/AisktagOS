@@ -1,10 +1,10 @@
 {
     "KPlugin": {
         "Authors": [ { "Name": "AIsktagOS" } ],
-        "Description": "Стеклянная тема окон с кнопками-«светофором»",
+        "Description": "Стеклянная тема окон Aurora Glass: кнопки справа, как в Windows",
         "Id": "AIsktagOS",
         "License": "GPL-2.0-or-later",
         "Name": "AIsktagOS",
-        "Version": "2.0"
+        "Version": "3.0"
     }
 }

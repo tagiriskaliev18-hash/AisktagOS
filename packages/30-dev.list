@@ -43,3 +43,33 @@ sqlite3
 shellcheck
 just
 direnv
+# Отладка, профилирование и быстрая сборка
+valgrind
+strace
+ltrace
+ccache
+mold
+cppcheck
+clang-format
+clang-tidy
+bear
+# Заголовки для сборки Python/Node/Ruby-расширений
+python3-dev
+libssl-dev
+libffi-dev
+zlib1g-dev
+# Удобство в терминале
+git-delta
+ncdu
+tree
+entr
+hyperfine
+socat
+netcat-openbsd
+dnsutils
+wl-clipboard
+xclip
+# Контейнеры и резервные копии
+skopeo
+buildah
+restic

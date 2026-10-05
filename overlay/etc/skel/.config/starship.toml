@@ -3,16 +3,16 @@ add_newline = true
 format = "$directory$git_branch$git_status$python$nodejs$rust$golang$docker_context$cmd_duration$line_break$character"
 
 [character]
-success_symbol = "[❯](bold #8b7dff)"
+success_symbol = "[❯](bold #3d7bff)"
 error_symbol = "[❯](bold #ff5f57)"
 
 [directory]
-style = "bold #22d3ee"
+style = "bold #22e4ff"
 truncation_length = 4
 
 [git_branch]
 symbol = "⎇ "
-style = "bold #c4b5fd"
+style = "bold #a78bfa"
 
 [cmd_duration]
 min_time = 2000

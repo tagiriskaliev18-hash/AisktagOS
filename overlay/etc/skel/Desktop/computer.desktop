@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Link
+Name=Этот компьютер
+Name[en]=This Computer
+Icon=computer
+URL=computer:/

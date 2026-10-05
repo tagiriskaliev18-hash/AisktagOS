@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Стиль Plasma «AIsktagOS Glass»: стеклянные панели для строки меню и плавающего дока.
+"""Стиль Plasma «AIsktagOS Glass»: стеклянная панель задач и всплывающие панели.
 
 Генерирует overlay/usr/share/plasma/desktoptheme/AIsktagOS/:
 - widgets/panel-background.svg      — без размытия (непрозрачнее, чтобы текст читался);
 - translucent/widgets/...           — когда в KWin работает blur: стекло с непрозрачностью 0.75;
 - opaque/widgets/...                — без композитинга;
-- widgets/line.svg                  — разделители в доке: тонкая линия, гаснущая к краям;
+- widgets/line.svg                  — разделители на панели: тонкая линия, гаснущая к краям;
 - metadata.json / metadata.desktop / plasmarc — описание темы, контраст и размытие.
 
 Всё, чего здесь нет (кнопки, подсказки, календарь…), берётся из breeze-dark (FallbackTheme).
@@ -13,9 +13,11 @@
 """
 from pathlib import Path
 
+from tokens import COLORS
+
 OUT = Path(__file__).resolve().parent.parent / "overlay/usr/share/plasma/desktoptheme/AIsktagOS"
 
-R = 14        # радиус скругления плавающего дока
+R = 14        # радиус скругления плавающих панелей и всплывающих окон (у панели задач видна только верхняя кромка)
 MID = 10      # размер растягиваемых частей
 SH = 22       # размер тени вокруг панели
 MARGIN = 4    # внутренние отступы содержимого (hint-*-margin), не зависят от радиуса
@@ -116,7 +118,7 @@ def panel_svg(opacity: float) -> str:
     size = 2 * R + MID
     sdefs, sh = shadow(0, size + 10)
     body = "\n".join([
-        frame("", "#0e1322", opacity, "#8fd8ff", 0.20, 0.10, 0, 0),
+        frame("", COLORS["bg1"], opacity, COLORS["focus"], 0.22, 0.10, 0, 0),
         # Маска размытия: сплошной силуэт, иначе полупрозрачный фон даёт «дырявый» blur
         frame("mask", "#000000", 1.0, "#000000", 0.0, 0.0, size + 10, 0),
         sh,
@@ -127,17 +129,18 @@ def panel_svg(opacity: float) -> str:
             f'<defs>{sdefs}</defs>\n{body}\n</svg>\n')
 
 
-LINE_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
+LINE = COLORS["focus"]
+LINE_SVG = f"""<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
 <defs>
 <linearGradient id="v" x1="0" y1="0" x2="0" y2="1">
-<stop offset="0" stop-color="#8fd8ff" stop-opacity="0"/>
-<stop offset="0.5" stop-color="#8fd8ff" stop-opacity="0.45"/>
-<stop offset="1" stop-color="#8fd8ff" stop-opacity="0"/>
+<stop offset="0" stop-color="{LINE}" stop-opacity="0"/>
+<stop offset="0.5" stop-color="{LINE}" stop-opacity="0.45"/>
+<stop offset="1" stop-color="{LINE}" stop-opacity="0"/>
 </linearGradient>
 <linearGradient id="h" x1="0" y1="0" x2="1" y2="0">
-<stop offset="0" stop-color="#8fd8ff" stop-opacity="0"/>
-<stop offset="0.5" stop-color="#8fd8ff" stop-opacity="0.45"/>
-<stop offset="1" stop-color="#8fd8ff" stop-opacity="0"/>
+<stop offset="0" stop-color="{LINE}" stop-opacity="0"/>
+<stop offset="0.5" stop-color="{LINE}" stop-opacity="0.45"/>
+<stop offset="1" stop-color="{LINE}" stop-opacity="0"/>
 </linearGradient>
 </defs>
 <rect id="vertical-line" x="2" y="0" width="1" height="40" fill="url(#v)"/>
@@ -161,10 +164,10 @@ enabled=true
 
 METADATA_DESKTOP = f"""[Desktop Entry]
 Name=AIsktagOS Glass
-Comment=Стеклянные панели AIsktagOS: строка меню и плавающий док
+Comment=Стеклянная панель задач AIsktagOS Hybrid
 X-KDE-PluginInfo-Author=AIsktagOS
 X-KDE-PluginInfo-Name=AIsktagOS
-X-KDE-PluginInfo-Version=2.0
+X-KDE-PluginInfo-Version=3.0
 X-KDE-PluginInfo-License=GPL-2.0-or-later
 X-KDE-PluginInfo-EnabledByDefault=true
 X-Plasma-API=5.0
@@ -177,11 +180,11 @@ FallbackTheme=breeze-dark
 METADATA_JSON = """{
     "KPlugin": {
         "Authors": [ { "Name": "AIsktagOS" } ],
-        "Description": "Стеклянные панели AIsktagOS: строка меню и плавающий док",
+        "Description": "Стеклянная панель задач AIsktagOS Hybrid",
         "Id": "AIsktagOS",
         "License": "GPL-2.0-or-later",
         "Name": "AIsktagOS Glass",
-        "Version": "2.0"
+        "Version": "3.0"
     },
     "X-Plasma-API": "5.0"
 }

@@ -1,0 +1,210 @@
+#!/usr/bin/env python3
+"""aisktag-new — новый проект из шаблона: структура, .gitignore, .editorconfig, README, git и (по желанию) devcontainer.
+
+    aisktag-new                       интерактивно: спросит шаблон и имя
+    aisktag-new python мой-проект     сразу
+    aisktag-new --list                список шаблонов
+Параметры: --devcontainer (добавить .devcontainer для VS Code/Distrobox), --no-git, --no-venv.
+"""
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+COMMON = {
+    ".editorconfig": """root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{js,ts,json,yml,yaml,html,css}]
+indent_size = 2
+
+[Makefile]
+indent_style = tab
+""",
+    "README.md": "# {name}\n\n{blurb}\n\n## Запуск\n\n{run}\n",
+}
+
+TEMPLATES = {
+    "python": {
+        "title": "Python: пакет с тестами (pytest) и виртуальным окружением",
+        "run": "```bash\nsource .venv/bin/activate\npip install -e '.[dev]'\npytest\npython -m {pkg}\n```",
+        "ignore": "__pycache__/\n*.pyc\n.venv/\n*.egg-info/\ndist/\nbuild/\n.pytest_cache/\n.ruff_cache/\n",
+        "files": {
+            "pyproject.toml": """[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "{name}"
+version = "0.1.0"
+description = "{blurb}"
+requires-python = ">=3.10"
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+""",
+            "src/{pkg}/__init__.py": '"""{name}"""\n\n__version__ = "0.1.0"\n',
+            "src/{pkg}/__main__.py": 'def main() -> None:\n    print("Привет из {name}!")\n\n\nif __name__ == "__main__":\n    main()\n',
+            "tests/test_smoke.py": "import {pkg}\n\n\ndef test_version():\n    assert {pkg}.__version__\n",
+        },
+        "post": lambda d, a: None if "--no-venv" in a else subprocess.run(["python3", "-m", "venv", ".venv"], cwd=d),
+    },
+    "node": {
+        "title": "Node.js: модуль с npm-скриптами",
+        "run": "```bash\nnpm install\nnpm start\nnpm test\n```",
+        "ignore": "node_modules/\ndist/\n.env\n*.log\n",
+        "files": {
+            "package.json": """{{
+  "name": "{name}",
+  "version": "0.1.0",
+  "description": "{blurb}",
+  "main": "index.js",
+  "scripts": {{
+    "start": "node index.js",
+    "test": "node --test"
+  }}
+}}
+""",
+            "index.js": "console.log('Привет из {name}!');\n",
+            "index.test.js": "const test = require('node:test');\nconst assert = require('node:assert');\n\ntest('работает', () => assert.strictEqual(1 + 1, 2));\n",
+        },
+    },
+    "rust": {
+        "title": "Rust: бинарный крейт (cargo)",
+        "run": "```bash\ncargo run\ncargo test\n```",
+        "ignore": "target/\n",
+        "files": {
+            "Cargo.toml": '[package]\nname = "{name}"\nversion = "0.1.0"\nedition = "2021"\n\n[dependencies]\n',
+            "src/main.rs": 'fn main() {{\n    println!("Привет из {name}!");\n}}\n',
+        },
+    },
+    "go": {
+        "title": "Go: модуль с тестом",
+        "run": "```bash\ngo run .\ngo test ./...\n```",
+        "ignore": "bin/\n*.test\n",
+        "files": {
+            "go.mod": "module {name}\n\ngo 1.22\n",
+            "main.go": 'package main\n\nimport "fmt"\n\nfunc main() {{\n\tfmt.Println("Привет из {name}!")\n}}\n',
+            "main_test.go": 'package main\n\nimport "testing"\n\nfunc TestSmoke(t *testing.T) {{\n\tif 1+1 != 2 {{\n\t\tt.Fatal("арифметика сломалась")\n\t}}\n}}\n',
+        },
+    },
+    "cpp": {
+        "title": "C++: CMake + clang-format + compile_commands.json для clangd",
+        "run": "```bash\ncmake -S . -B build -G Ninja\ncmake --build build\n./build/{name}\n```",
+        "ignore": "build/\n.cache/\ncompile_commands.json\n",
+        "files": {
+            "CMakeLists.txt": """cmake_minimum_required(VERSION 3.22)
+project({name} LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)   # нужен clangd для подсказок в редакторе
+
+add_executable({name} src/main.cpp)
+target_compile_options({name} PRIVATE -Wall -Wextra -Wpedantic)
+""",
+            "src/main.cpp": '#include <iostream>\n\nint main() {{\n    std::cout << "Привет из {name}!\\n";\n    return 0;\n}}\n',
+            ".clang-format": "BasedOnStyle: LLVM\nIndentWidth: 4\nColumnLimit: 100\n",
+        },
+    },
+    "web": {
+        "title": "Веб: статическая страница (HTML + CSS + JS)",
+        "run": "```bash\npython3 -m http.server 8000   # откройте http://localhost:8000\n```",
+        "ignore": "node_modules/\n.env\n",
+        "files": {
+            "index.html": '<!doctype html>\n<html lang="ru">\n<head>\n  <meta charset="utf-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1">\n  <title>{name}</title>\n  <link rel="stylesheet" href="style.css">\n</head>\n<body>\n  <h1>{name}</h1>\n  <p id="out"></p>\n  <script src="main.js"></script>\n</body>\n</html>\n',
+            "style.css": "body {{ font-family: system-ui, sans-serif; max-width: 42rem; margin: 3rem auto; padding: 0 1rem; }}\n",
+            "main.js": "document.getElementById('out').textContent = 'Привет из {name}!';\n",
+        },
+    },
+}
+
+DEVCONTAINER = """{{
+  "name": "{name}",
+  "image": "mcr.microsoft.com/devcontainers/base:ubuntu-24.04",
+  "customizations": {{ "vscode": {{ "extensions": [] }} }}
+}}
+"""
+
+
+def die(msg: str) -> None:
+    print(f"aisktag-new: {msg}", file=sys.stderr)
+    sys.exit(1)
+
+
+def write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+
+
+def create(kind: str, name: str, args: list[str], base: Path | None = None) -> Path:
+    if kind not in TEMPLATES:
+        die(f"нет шаблона «{kind}». Доступны: {', '.join(TEMPLATES)}")
+    if not re.fullmatch(r"[A-Za-zА-Яа-яЁё0-9._-]+", name):
+        die("имя проекта: буквы, цифры, точка, дефис и подчёркивание")
+    d = (base or Path.cwd()) / name
+    if d.exists():
+        die(f"папка {d} уже существует")
+    t = TEMPLATES[kind]
+    pkg = re.sub(r"[^a-z0-9_]", "_", name.lower()) or "app"
+    ctx = {"name": name, "pkg": pkg, "blurb": t["title"].split(":")[0] + " — заготовка проекта."}
+    ctx["run"] = t["run"].format(**ctx)
+    if kind == "rust" and shutil.which("cargo") and "--no-git" not in args:
+        subprocess.run(["cargo", "new", name], cwd=d.parent, check=False)
+    if not d.exists():
+        for rel, text in {**{k: v for k, v in COMMON.items()}, ".gitignore": t["ignore"], **t["files"]}.items():
+            write(d / rel.format(**ctx), text.format(**ctx) if rel not in (".editorconfig", ".gitignore") else text)
+    if "--devcontainer" in args:
+        write(d / ".devcontainer/devcontainer.json", DEVCONTAINER.format(**ctx))
+    if t.get("post"):
+        t["post"](d, args)
+    if "--no-git" not in args and shutil.which("git"):
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=d)
+        ident = subprocess.run(["git", "config", "user.name"], capture_output=True, text=True).stdout.strip()
+        if ident:
+            subprocess.run(["git", "add", "-A"], cwd=d)
+            subprocess.run(["git", "commit", "-q", "-m", f"chore: начальная заготовка проекта ({kind})"], cwd=d)
+    return d
+
+
+def main() -> None:
+    args = [a for a in sys.argv[1:] if a.startswith("--")]
+    pos = [a for a in sys.argv[1:] if not a.startswith("--")]
+    if "--list" in args or "-h" in sys.argv[1:]:
+        print(__doc__)
+        for k, v in TEMPLATES.items():
+            print(f"  {k:<8} {v['title']}")
+        return
+    if len(pos) < 2:
+        print("Шаблоны:")
+        for i, (k, v) in enumerate(TEMPLATES.items(), 1):
+            print(f"  {i}. {k:<8} {v['title']}")
+        try:
+            pick = input("Номер или название шаблона: ").strip()
+            kind = list(TEMPLATES)[int(pick) - 1] if pick.isdigit() and 0 < int(pick) <= len(TEMPLATES) else pick
+            name = input("Имя проекта: ").strip()
+        except (EOFError, KeyboardInterrupt, ValueError):
+            sys.exit(1)
+    else:
+        kind, name = pos[0], pos[1]
+    d = create(kind, name, args)
+    print(f"\n✔ Проект создан: {d}\n  cd {d} && code .")
+    print("  Подсказка: «ai commit» напишет сообщение коммита, а Ctrl+G в терминале превратит описание в команду.")
+
+
+if __name__ == "__main__":
+    main()

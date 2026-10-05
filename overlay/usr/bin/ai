@@ -1,0 +1,357 @@
+#!/usr/bin/env python3
+"""ai — встроенный ИИ AIsktagOS в терминале (локальная модель Mind, без интернета и без телеметрии).
+
+  ai вопрос…                спросить; stdin тоже читается:  cat error.log | ai что это значит
+  ai chat                   диалог (/new, /persona code|review|admin|…, /exit)
+  ai cmd описание…          превратить описание в одну shell-команду (в zsh: Ctrl+G)
+  ai why                    объяснить ошибку последней команды (в kitty берёт её вывод сам)
+  ai commit [-y]            сообщение коммита по git diff --staged
+  ai review [файл]          ревью git diff или файла
+  ai explain файл           объяснить код
+  ai status                 состояние: модель, сервер, подключение
+  ai model [install|use|remove <id>]   модели: lite, standard, pro
+  ai web                    открыть веб-интерфейс модели в браузере
+  ai env                    переменные OPENAI_* для сторонних инструментов:  eval "$(ai env)"
+  ai run команда…           запустить инструмент (aider, continue…) с подключением к локальной модели
+"""
+import os
+import platform
+import re
+import shutil
+import stat
+import subprocess
+import sys
+import threading
+import time
+
+try:
+    import readline  # noqa: F401  (история и правка строки в `ai chat`)
+except ImportError:
+    pass
+
+sys.path.insert(0, "/usr/lib/aisktagos")
+import aisktag_ai as ai  # noqa: E402
+
+TTY = sys.stdout.isatty()
+ERR_TTY = sys.stderr.isatty()
+DIM, BOLD, RESET = ("\033[2m", "\033[1m", "\033[0m") if ERR_TTY else ("", "", "")
+MAX_CONTEXT = 24000          # символов контекста из stdin/файлов (маленькая модель лучше работает с короткими входами)
+
+
+def die(msg: str, code: int = 1):
+    print(f"ai: {msg}", file=sys.stderr)
+    sys.exit(code)
+
+
+def clip(text: str, limit: int = MAX_CONTEXT) -> str:
+    if len(text) <= limit:
+        return text
+    half = limit // 2
+    return text[:half] + "\n…[вырезано]…\n" + text[-half:]
+
+
+def piped_input() -> str:
+    """Текст из конвейера или перенаправления файла. В терминале и в «пустом» stdin (cron, IDE) ничего не ждём."""
+    try:
+        mode = os.fstat(sys.stdin.fileno()).st_mode
+    except (OSError, ValueError):
+        return ""
+    return sys.stdin.read() if stat.S_ISFIFO(mode) or stat.S_ISREG(mode) else ""
+
+
+def run_cmd(argv: list[str], **kw) -> str:
+    try:
+        return subprocess.run(argv, capture_output=True, text=True, **kw).stdout
+    except OSError:
+        return ""
+
+
+class Waiter:
+    """Показывает «модель думает…» в stderr, пока нет первого токена (первая загрузка — до минуты)."""
+
+    def __init__(self, text: str = "модель просыпается"):
+        self.text, self.stop = text, threading.Event()
+        self.t = threading.Thread(target=self._spin, daemon=True)
+
+    def _spin(self):
+        t0, frames = time.time(), "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+        i = 0
+        while not self.stop.wait(0.12):
+            if time.time() - t0 > 1.0 and ERR_TTY:
+                print(f"\r{DIM}{frames[i % 10]} {self.text}… {int(time.time() - t0)} с{RESET}", end="", file=sys.stderr, flush=True)
+                i += 1
+
+    def __enter__(self):
+        if ERR_TTY:
+            self.t.start()
+        return self
+
+    def done(self):
+        if not self.stop.is_set():
+            self.stop.set()
+            if ERR_TTY:
+                print("\r\033[K", end="", file=sys.stderr, flush=True)
+
+    def __exit__(self, *exc):
+        self.done()
+
+
+def ask(messages: list[dict], *, echo: bool = True, **kw) -> str:
+    """Стримит ответ в stdout и возвращает полный текст."""
+    out = []
+    try:
+        with Waiter() as w:
+            for piece in ai.stream_chat(messages, **kw):
+                w.done()
+                out.append(piece)
+                if echo:
+                    sys.stdout.write(piece)
+                    sys.stdout.flush()
+    except ai.AIError as e:
+        die(str(e))
+    except KeyboardInterrupt:
+        print(f"\n{DIM}(прервано){RESET}", file=sys.stderr)
+    if echo and out and not "".join(out).endswith("\n"):
+        print()
+    return "".join(out)
+
+
+def sys_msg(persona: str = "general") -> dict:
+    return {"role": "system", "content": ai.PERSONAS[persona][1]}
+
+
+# ---- команды ------------------------------------------------------------------
+
+def cmd_ask(args: list[str]) -> None:
+    question = " ".join(args).strip()
+    data = piped_input()
+    if not question and not data:
+        die("задайте вопрос: ai как распаковать tar.gz   (справка: ai --help)")
+    content = question or "Объясни это."
+    if data:
+        content += f"\n\n```\n{clip(data)}\n```"
+    ask([sys_msg(), {"role": "user", "content": content}])
+
+
+def cmd_chat(args: list[str]) -> None:
+    persona = "general"
+    history = [sys_msg(persona)]
+    print(f"{BOLD}Mind{RESET} — диалог. /new — заново, /persona <{'|'.join(ai.PERSONAS)}>, /exit — выход.")
+    while True:
+        try:
+            line = input(f"{BOLD}›{RESET} ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if not line:
+            continue
+        if line in ("/exit", "/quit", "/q"):
+            return
+        if line == "/new":
+            history = [sys_msg(persona)]
+            print(f"{DIM}новый диалог{RESET}")
+            continue
+        if line.startswith("/persona"):
+            name = line.split(maxsplit=1)[1].strip() if " " in line else ""
+            if name in ai.PERSONAS:
+                persona = name
+                history = [sys_msg(persona)]
+                print(f"{DIM}роль: {ai.PERSONAS[name][0]}{RESET}")
+            else:
+                print("роли: " + ", ".join(ai.PERSONAS))
+            continue
+        history.append({"role": "user", "content": line})
+        answer = ask(history)
+        history.append({"role": "assistant", "content": answer})
+        history[:] = history[:1] + history[-12:]          # короткая память: малой модели нужен короткий контекст
+
+
+def clean_command(text: str) -> str:
+    text = re.sub(r"^```[a-z]*\n?|```$", "", text.strip(), flags=re.M).strip()
+    lines = [ln.strip() for ln in text.splitlines() if ln.strip()]
+    first = lines[0] if lines else ""
+    return re.sub(r"^\$\s+", "", first)
+
+
+def cmd_cmd(args: list[str]) -> None:
+    task = " ".join(args).strip()
+    if not task:
+        die("опишите задачу: ai cmd найти файлы больше 100 МБ")
+    prompt = (f"Ты превращаешь описание задачи в ОДНУ команду для zsh на {platform.system()} Ubuntu 24.04. "
+              "Ответ — только сама команда в одну строку: без пояснений, без markdown, без кавычек вокруг. "
+              "Предпочитай безопасные варианты, не используй sudo без необходимости, не удаляй данные без явной просьбы.")
+    text = ask([{"role": "system", "content": prompt},
+                {"role": "user", "content": f"Текущая папка: {os.getcwd()}\nЗадача: {task}"}],
+               echo=False, temperature=0.1, max_tokens=160)
+    cmd = clean_command(text)
+    if not cmd:
+        die("модель не предложила команду")
+    print(cmd)
+
+
+def last_terminal_output() -> str:
+    """Вывод последней команды: из kitty (shell integration) или хотя бы текст экрана."""
+    win = os.environ.get("KITTY_WINDOW_ID")
+    if win and shutil.which("kitty"):
+        for extent in ("last_non_empty_output", "last_cmd_output", "screen"):
+            r = subprocess.run(["kitty", "@", "get-text", "--match", f"id:{win}", "--extent", extent],
+                               capture_output=True, text=True)
+            if r.returncode == 0 and r.stdout.strip():
+                return r.stdout
+    return ""
+
+
+def cmd_why(args: list[str]) -> None:
+    prev, status = os.environ.get("AI_PREV_CMD", ""), os.environ.get("AI_PREV_STATUS", "")
+    out = last_terminal_output()
+    if not (prev or out):
+        die("нет данных о последней команде. Запустите ai why в терминале kitty сразу после ошибки.")
+    ctx = ""
+    if prev:
+        ctx += f"Команда: {prev}\n"
+    if status:
+        ctx += f"Код возврата: {status}\n"
+    if out:
+        ctx += f"\nВывод:\n```\n{clip(out, 12000)}\n```"
+    ask([sys_msg("admin"),
+         {"role": "user", "content": "Объясни, почему команда завершилась так, и предложи, как исправить. "
+                                     "Сначала причина в 1–2 фразах, затем исправленная команда или шаги.\n\n" + ctx}])
+
+
+def git(*a: str) -> str:
+    return run_cmd(["git", *a])
+
+
+def cmd_commit(args: list[str]) -> None:
+    diff = git("diff", "--staged")
+    if not diff.strip():
+        diff = git("diff")
+        if diff.strip():
+            print(f"{DIM}(нет проиндексированных изменений — беру git diff){RESET}", file=sys.stderr)
+    if not diff.strip():
+        die("нет изменений для коммита")
+    samples = git("log", "-5", "--format=%s").strip()
+    prompt = ("Напиши сообщение git-коммита по изменениям. Формат Conventional Commits: первая строка "
+              "<type>(<область>): кратко, до 72 символов; затем пустая строка и до 5 пунктов, что и зачем изменено. "
+              "Пиши на том же языке, что последние коммиты репозитория. Только текст сообщения, без markdown и пояснений.\n\n"
+              f"Последние коммиты:\n{samples or '(нет)'}\n\nИзменения:\n```diff\n{clip(diff, 20000)}\n```")
+    msg = clean_text(ask([sys_msg("code"), {"role": "user", "content": prompt}], echo=False, temperature=0.2, max_tokens=300))
+    print(msg)
+    if "-y" in args:
+        subprocess.run(["git", "commit", "-m", msg])
+        return
+    if sys.stdin.isatty() and sys.stdout.isatty():
+        ans = input(f"\n{BOLD}Закоммитить?{RESET} [y — да / e — править / N — нет] ").strip().lower()
+        if ans == "y":
+            subprocess.run(["git", "commit", "-m", msg])
+        elif ans == "e":
+            subprocess.run(["git", "commit", "-e", "-m", msg])
+
+
+def clean_text(text: str) -> str:
+    return re.sub(r"^```[a-z]*\n?|\n?```$", "", text.strip()).strip()
+
+
+def cmd_review(args: list[str]) -> None:
+    if args:
+        try:
+            body = open(args[0], encoding="utf-8", errors="replace").read()
+        except OSError as e:
+            die(str(e))
+        what = f"файл {args[0]}"
+    else:
+        body = piped_input() or git("diff", "--staged") or git("diff")
+        what = "изменения (diff)"
+    if not body.strip():
+        die("нечего ревьюить: укажите файл или подготовьте git diff")
+    ask([sys_msg("review"), {"role": "user", "content": f"Сделай ревью: {what}.\n\n```\n{clip(body)}\n```"}])
+
+
+def cmd_explain(args: list[str]) -> None:
+    if not args:
+        die("укажите файл: ai explain main.py")
+    try:
+        body = open(args[0], encoding="utf-8", errors="replace").read()
+    except OSError as e:
+        die(str(e))
+    ask([sys_msg("explain"), {"role": "user", "content": f"Объясни код файла {args[0]}.\n\n```\n{clip(body)}\n```"}])
+
+
+def cmd_status(args: list[str]) -> None:
+    cfg = ai.load_config()
+    labels = {"ready": "готова (модель загружена)", "loading": "загружается…",
+              "idle": "спит — проснётся по первому запросу", "missing": "служба не запущена"}
+    st = ai.backend_state() if ai.is_local(cfg) else None
+    print(f"{BOLD}Подключение:{RESET} {cfg['base_url']}  ({'локально' if ai.is_local(cfg) else 'внешний сервер'})")
+    if st:
+        info = ai.list_models()
+        print(f"{BOLD}Состояние:{RESET}   {labels[st]}")
+        print(f"{BOLD}Модель:{RESET}      {info['active']}   (память ПК: {ai.ram_mb() // 1024} ГБ, рекомендуем: {ai.recommend_model()})")
+    else:
+        print(f"{BOLD}Модель:{RESET}      {cfg['model']}")
+    print(f"{BOLD}Настройки:{RESET}   {ai.USER_CONF}")
+
+
+def cmd_model(args: list[str]) -> None:
+    if not args:
+        info = ai.list_models()
+        rec = ai.recommend_model()
+        for m in info["models"]:
+            mark = "●" if m["id"] == info["active"] else "○"
+            have = "установлена" if m.get("installed", m.get("bundled")) else f"не установлена, {m['size_mb']} МБ"
+            star = "  ← рекомендуется для вашего ПК" if m["id"] == rec else ""
+            print(f"{mark} {BOLD}{m['id']:<9}{RESET}{m['name']:<22} {have}{star}\n    {DIM}{m['description']}{RESET}")
+        print(f"\n{DIM}ai model install <id> · ai model use <id> · ai model remove <id>{RESET}")
+        return
+    if args[0] in ("install", "use", "remove") and len(args) == 2:
+        argv = [ai.MODEL_HELPER, *args]
+        if os.geteuid() != 0:
+            argv = ["pkexec", *argv]
+        sys.exit(subprocess.call(argv))
+    die("использование: ai model [install|use|remove <id>]")
+
+
+def cmd_web(args: list[str]) -> None:
+    url = "http://127.0.0.1:6573"
+    print(url)
+    if shutil.which("xdg-open"):
+        subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+def openai_env() -> dict:
+    cfg = ai.load_config()
+    return {"OPENAI_BASE_URL": cfg["base_url"], "OPENAI_API_BASE": cfg["base_url"],
+            "OPENAI_API_KEY": cfg.get("api_key") or "aisktag-local", "OPENAI_MODEL": cfg["model"]}
+
+
+def cmd_env(args: list[str]) -> None:
+    for k, v in openai_env().items():
+        print(f"export {k}={v!r}")
+
+
+def cmd_run(args: list[str]) -> None:
+    if not args:
+        die("использование: ai run <команда…>, например: ai run aider")
+    if shutil.which(args[0]) is None:
+        die(f"команда «{args[0]}» не найдена")
+    sys.exit(subprocess.call(args, env={**os.environ, **openai_env()}))
+
+
+COMMANDS = {"chat": cmd_chat, "cmd": cmd_cmd, "why": cmd_why, "commit": cmd_commit, "review": cmd_review,
+            "explain": cmd_explain, "status": cmd_status, "model": cmd_model, "web": cmd_web,
+            "env": cmd_env, "run": cmd_run}
+
+
+def main() -> None:
+    args = sys.argv[1:]
+    if args[:1] in (["-h"], ["--help"], ["help"]):
+        print(__doc__)
+        return
+    if args and args[0] in COMMANDS:
+        COMMANDS[args[0]](args[1:])
+    else:
+        cmd_ask(args)
+
+
+if __name__ == "__main__":
+    main()
