@@ -1,7 +1,7 @@
-# Только для live-USB и установщика; удаляются из установленной системы
+# Только live-носитель. Calamares удаляет их при установке (modules/packages.conf),
+# тот же список попадает в casper/filesystem.manifest-remove.
+# cryptsetup, lvm2 и mdadm здесь не перечислены: они нужны установленной системе
+# (шифрование, LVM, RAID) и лежат в packages/10-base.list.
 casper
 calamares
-cryptsetup
-lvm2
-mdadm
 gparted

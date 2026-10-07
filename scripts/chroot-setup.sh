@@ -250,9 +250,11 @@ systemctl enable NetworkManager sddm aisktagos-flathub.service
 # ИИ Mind: сокет слушает 127.0.0.1:6573, модель загружается только по первому запросу
 systemctl enable aisktag-llm.socket
 systemctl set-default graphical.target
-# Сетью управляет NetworkManager; ожидание systemd-networkd (если его притянул netplan)
-# только задерживает загрузку до 2 минут «A start job is running for Wait for Network…»
+# Сетью управляет NetworkManager. Ожидание сети перед рабочим столом на ноутбуке
+# без Wi-Fi и в виртуальной машине добавляет десятки секунд и больше.
 systemctl mask systemd-networkd-wait-online.service || true
+systemctl disable NetworkManager-wait-online.service || true
+systemctl mask NetworkManager-wait-online.service || true
 # Docker запускается по первому обращению — не тормозит загрузку
 systemctl disable docker.service || true
 systemctl enable docker.socket || true

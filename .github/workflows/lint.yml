@@ -1,0 +1,37 @@
+name: Проверка скриптов
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  shell:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: shellcheck, синтаксис и лаунчер установщика
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+          shellcheck -S warning -x \
+            build.sh \
+            scripts/*.sh \
+            overlay/usr/lib/aisktagos/*.sh \
+            overlay/etc/xdg/plasma-workspace/env/*.sh \
+            overlay/usr/bin/aisktag-install \
+            tools/test-install-launcher.sh
+          for f in build.sh scripts/*.sh overlay/usr/lib/aisktagos/*.sh \
+                   overlay/etc/xdg/plasma-workspace/env/*.sh \
+                   overlay/usr/bin/aisktag-install overlay/usr/bin/aisktag-welcome \
+                   overlay/usr/bin/aisktag-drivers overlay/usr/bin/aisktag-devsetup \
+                   tools/test-install-launcher.sh; do
+            if head -n 1 "$f" | grep -q bash; then
+              bash -n "$f"
+            else
+              sh -n "$f"
+            fi
+          done
+          python3 -m py_compile overlay/usr/lib/aisktagos/aisktag-center.py
+          bash tools/test-install-launcher.sh
