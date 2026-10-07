@@ -477,6 +477,10 @@ class Agent:
         # Ответ инструмента не может идти без вызова — отрезаем осиротевшие хвосты
         while kept and kept[0]["role"] == "tool":
             kept.pop(0)
+        # Сама задача должна остаться перед глазами модели, даже если шаги вытеснили её из бюджета
+        task = next((m for m in reversed(self.messages) if m["role"] == "user" and isinstance(m["content"], str)), None)
+        if task is not None and not any(m is task for m in kept):
+            kept.insert(0, task)
         return self.messages[:1] + kept
 
     def _log(self, kind: str, text: str) -> None:
