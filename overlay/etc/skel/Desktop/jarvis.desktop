@@ -12,3 +12,5 @@ Terminal=false
 Categories=Utility;Development;
 Keywords=jarvis;джарвис;агент;agent;ai;ии;автоматизация;браузер;
 StartupWMClass=aisktag-jarvis
+# Глобальная клавиша по умолчанию (kglobalaccel читает её и из kglobalshortcutsrc)
+X-KDE-Shortcuts=Meta+J

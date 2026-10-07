@@ -12,6 +12,7 @@ Terminal=false
 Categories=Qt;KDE;Utility;Development;
 Keywords=ai;ии;нейросеть;ассистент;llm;mind;чат;chatgpt;copilot;
 StartupWMClass=aisktag-mind
+X-KDE-Shortcuts=Meta+A
 Actions=Clipboard;
 
 [Desktop Action Clipboard]
