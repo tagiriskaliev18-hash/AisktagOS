@@ -1,6 +1,8 @@
-# Репозиторий собирается на Linux: везде LF, даже при работе на Windows
+# Р РµРїРѕР·РёС‚РѕСЂРёР№ СЃРѕР±РёСЂР°РµС‚СЃСЏ РЅР° Linux: РІРµР·РґРµ LF, РґР°Р¶Рµ РїСЂРё СЂР°Р±РѕС‚Рµ РЅР° Windows
 * text=auto eol=lf
 *.png binary
 *.jpg binary
 *.ico binary
 *.gguf binary
+*.bat text eol=crlf
+*.ps1 text eol=crlf

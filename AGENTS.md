@@ -42,7 +42,7 @@ overlay/                    файлы поверх Ubuntu; копируются
   etc/skel/                 zsh, kitty, starship, VS Code, git, ~/.continue (Mind), Desktop/*.desktop (значки на столе)
   etc/sysctl.d, security/limits.d, systemd/{system,user}.conf.d   настройки под разработку
   usr/bin/                  ai, aisktag-mind, aisktag-new, aisktag-doctor, aisktag-welcome/devsetup/drivers/install
-  usr/lib/aisktagos/        aisktag-center.py (Центр), aisktag-mind.py (окно ИИ), aisktag_ai.py (клиент), aisktag_theme.py (тема Qt из токенов),
+  usr/lib/aisktagos/        aisktag-center.py (Центр), aisktag-mind.py (окно ИИ), aisktag_ai.py (клиент), aisktag_jarvis.py + aisktag_browser.py (агент Джарвис), aisktag_theme.py (тема Qt из токенов),
                             ai/{aisktag-llm-run, aisktag-llm-wait, aisktag-ai-model}, post-install.sh, display-fallback.sh, live-session.sh
   usr/lib/systemd/system/   aisktag-llm.socket, aisktag-llm.service (прокси), aisktag-llm-backend.service (llama-server)
   usr/share/aisktagos/      ai/models.json (каталог моделей), design/tokens.json (генерируется), zsh/aisktag-ai.zsh
@@ -52,7 +52,7 @@ overlay/                    файлы поверх Ubuntu; копируются
   usr/share/polkit-1/actions/org.aisktagos.ai.policy
 assets/                     tokens.py (дизайн-токены, --check), make-assets.py [icons|wallpapers|grub|slides], make-aurorae.py, make-plasma-theme.py
 tools/                      test-vm.py (QEMU), vbox-vm.ps1, mock-llm.py (заглушка ИИ-сервера), shot-ui.py (снимки Qt-окон без сессии)
-docs/AI.md, docs/DESIGN.md  устройство ИИ и дизайн-система
+docs/AI.md, docs/JARVIS.md, docs/DESIGN.md  устройство ИИ, агент Джарвис и дизайн-система
 .github/workflows/build-iso.yml  lint (shellcheck, py_compile, токены) + сборка ISO и публикация в Releases (части по 1,9 ГБ)
 ```
 
@@ -100,6 +100,10 @@ sudo AI_BUNDLE_MODEL=none SQUASHFS_COMP=zstd ZSTD_LEVEL=3 WORK_DIR=/var/tmp/aisk
 13. **Windows при разработке:** в репозитории `.gitattributes` задаёт LF. Python на Windows пишет CRLF, если не указать `newline=''`. Скрипты, работающие с `\` и `\n` в heredoc, лучше править инструментом правки файлов, а не `python - <<EOF`.
 14. Размер ISO с моделью lite ≈ 3,5–4 ГБ: workflow режет на части по 1,9 ГБ. Для быстрой сборки `AI_BUNDLE_MODEL=none`.
 15. Модель — в `/usr/share/aisktagos/ai/models`, скачанные — в `/var/lib/aisktagos/ai/models`. Служба работает как `DynamicUser`, поэтому оба каталога должны быть читаемы всем (`chmod 644`/`755`).
+16. **Шрифты GRUB:** `grub-mkfont -n` задаёт только семейство, GRUB сам дописывает стиль и размер. С `-n "Inter Regular 20"` шрифт назывался «Inter Regular 20 Regular 20», тема его не находила и меню рисовалось огромным Inter Bold 44. Правильно: `-n Inter` (+ `-b` для жирного). При Secure Boot подписанный GRUB вообще не грузит свои шрифты (`prohibited by secure boot policy`) и берёт unicode.pf2 — это нормально.
+17. **Rufus:** образ проверен как «ISO-режим» (файлы на FAT32, UEFI) и как DD-образ (BIOS и UEFI) — всё грузится до установщика. В ISO-режиме для BIOS Rufus ставит свой GRUB и может попросить скачать файлы под нашу версию; при сомнениях — режим «DD-образ». Самая частая «ошибка Rufus» — недокачанная часть ISO, поэтому `join-windows.bat` сверяет SHA-256.
+18. **Джарвис и Firefox:** управление через WebDriver BiDi (`--remote-debugging-port`), CDP в Firefox удалён. В песочнице Firefox из образа запускается так: распаковать `usr/lib/firefox` из squashfs (`unsquashfs -o <смещение ISO>`), `JARVIS_FIREFOX=…/firefox JARVIS_HEADLESS=1 python3 tools/test-jarvis.py`. Не используйте `pkill -f` с шаблоном из своей же команды — убьёт оболочку.
+19. **Папка рабочего стола** в русской сессии — «Рабочий стол», а не `~/Desktop` из `/etc/skel`: ярлыки раскладывает `desktop-shortcuts.sh` через `xdg-user-dir DESKTOP`.
 
 ## Что делать дальше (приоритеты)
 
@@ -108,3 +112,4 @@ sudo AI_BUNDLE_MODEL=none SQUASHFS_COMP=zstd ZSTD_LEVEL=3 WORK_DIR=/var/tmp/aisk
 3. Своя тема SDDM и заставка загрузки в стиле Aurora (сейчас Breeze); светлая тема как вторая схема.
 4. Уникальные обои «Aurora» (процедурные ленты) и пересмотр меню GRUB: отдельные пункты «Попробовать» и «Установить».
 5. Контекстное меню Dolphin «Спросить Mind о файле», KRunner-плагин для `ai:`-запросов.
+6. Джарвис: окно с чатом (сейчас — терминал kitty), управление мышью и клавиатурой в окнах рабочего стола (ydotool + uinput), проверка на реальной модели с вызовом инструментов (standard/pro).

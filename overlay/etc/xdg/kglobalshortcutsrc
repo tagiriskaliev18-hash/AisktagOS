@@ -10,6 +10,9 @@ _launch=Ctrl+Alt+T\tMeta+Return
 [services][aisktag-mind.desktop]
 _launch=Meta+A
 
+[services][aisktag-jarvis.desktop]
+_launch=Meta+J
+
 [kwin]
 Overview=Meta+Tab\tMeta+W,Meta+W,Overview
 Switch One Desktop to the Left=Ctrl+Alt+Left\tMeta+Ctrl+Left,Meta+Ctrl+Left,Switch One Desktop to the Left

@@ -7,3 +7,9 @@ libcurl4t64
 jq
 curl
 policykit-1
+
+# Джарвис: распознавание текста на снимке экрана (screen_read) и уведомления
+tesseract-ocr
+tesseract-ocr-rus
+tesseract-ocr-eng
+libnotify-bin

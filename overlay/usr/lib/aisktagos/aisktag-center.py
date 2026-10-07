@@ -318,6 +318,8 @@ class WelcomePage(QWidget):
             ("Снимки системы", "Откат к рабочему состоянию (Timeshift)", "timeshift", lambda: launch("timeshift-launcher")),
             ("Настройки", "Экран, звук, сеть, оформление", "preferences-system", lambda: launch("systemsettings")),
             ("Терминал", "kitty + zsh, Ctrl+G — команда из описания", "kitty", lambda: launch("kitty")),
+            ("Джарвис — ИИ-агент", "Сам делает задачи: файлы, команды, браузер (Meta+J)", "aisktagos-jarvis",
+             lambda: launch("kitty", "--class", "aisktag-jarvis", "--title", "Джарвис", "jarvis")),
         ]
         for i, (t, s, ic, fn) in enumerate(tiles):
             grid.addWidget(tile(t, s, ic, fn), i // 2, i % 2)
@@ -332,6 +334,7 @@ class WelcomePage(QWidget):
             "<td><b>Meta+Space</b> / <b>Meta+R</b></td><td>Поиск приложений и файлов, калькулятор</td></tr>"
             "<tr><td><b>Meta+A</b></td><td>ИИ-ассистент Mind</td>"
             "<td><b>Ctrl+G</b> в терминале</td><td>Описание → команда</td></tr>"
+            "<tr><td><b>Meta+J</b></td><td>ИИ-агент Джарвис</td><td></td><td></td></tr>"
             "<tr><td><b>Meta+E</b></td><td>Файловый менеджер</td>"
             "<td><b>Meta+Enter</b> / <b>Ctrl+Alt+T</b></td><td>Терминал</td></tr>"
             "<tr><td><b>Meta+Tab</b></td><td>Обзор всех окон</td>"
@@ -408,7 +411,11 @@ class AIPage(QWidget):
         open_btn.clicked.connect(lambda: launch("aisktag-mind"))
         web_btn = QPushButton("Веб-интерфейс модели")
         web_btn.clicked.connect(lambda: launch("xdg-open", "http://127.0.0.1:6573"))
+        jarvis_btn = QPushButton("Джарвис — агент")
+        jarvis_btn.setToolTip("ИИ-агент: сам работает с файлами, командами, приложениями и браузером")
+        jarvis_btn.clicked.connect(lambda: launch("kitty", "--class", "aisktag-jarvis", "--title", "Джарвис", "jarvis"))
         btns.addWidget(open_btn)
+        btns.addWidget(jarvis_btn)
         btns.addWidget(web_btn)
         btns.addStretch(1)
         sl.addLayout(btns)

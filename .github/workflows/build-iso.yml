@@ -30,7 +30,8 @@ jobs:
           shellcheck -S warning build.sh scripts/*.sh overlay/usr/lib/aisktagos/*.sh             overlay/usr/lib/aisktagos/ai/aisktag-llm-run overlay/usr/lib/aisktagos/ai/aisktag-llm-wait             overlay/usr/bin/aisktag-install
       - name: Python и дизайн-токены
         run: |
-          python3 -m py_compile overlay/usr/lib/aisktagos/*.py overlay/usr/lib/aisktagos/ai/aisktag-ai-model             overlay/usr/bin/ai overlay/usr/bin/aisktag-new overlay/usr/bin/aisktag-doctor
+          python3 -m py_compile overlay/usr/lib/aisktagos/*.py overlay/usr/lib/aisktagos/ai/aisktag-ai-model             overlay/usr/bin/ai overlay/usr/bin/aisktag-new overlay/usr/bin/aisktag-doctor overlay/usr/bin/jarvis
+          python3 tools/test-jarvis.py
           python3 assets/tokens.py --check
       - name: Каталог моделей, раскладка Plasma, правила polkit
         run: |
@@ -72,8 +73,9 @@ jobs:
             split -b 1900M -d -a 1 "$iso" "$iso.part"
             rm "$iso"
             parts="$(ls "$iso".part* | tr '\n' ' ')"
-            plus="$(ls "$iso".part* | sed 's/$/ +/' | tr '\n' ' ' | sed 's/ + $//')"
-            printf '@echo off\r\necho Склеиваю %s ...\r\ncopy /b %s %s\r\necho Готово.\r\npause\r\n' "$iso" "$plus" "$iso" > "join-windows.bat"
+            # Скрипт для Windows: проверяет, что скачаны все части, склеивает и сверяет SHA-256
+            sed -e "s/@ISO@/$iso/" -e "s/@PARTS@/$(ls "$iso".part* | wc -l)/" -e 's/\r$//' -e 's/$/\r/' \
+                "$GITHUB_WORKSPACE/tools/release/join-windows.bat" > join-windows.bat
             printf '#!/bin/sh\ncat %s> %s && sha256sum -c %s.sha256\n' "$parts" "$iso" "$iso" > join-linux.sh
             chmod +x join-linux.sh
           fi

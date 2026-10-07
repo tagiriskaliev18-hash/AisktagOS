@@ -121,8 +121,14 @@ find /usr/share/doc -type d -empty -delete
 
 # --- Файлы AIsktagOS --------------------------------------------------------------
 cp -a "$B/overlay/." /
-chmod +x /usr/bin/aisktag-* /usr/bin/ai /usr/lib/aisktagos/*.sh /usr/lib/aisktagos/*.py /usr/lib/aisktagos/ai/* \
-         /etc/xdg/plasma-workspace/env/*.sh 2>/dev/null || true
+chmod +x /usr/bin/aisktag-* /usr/bin/ai /usr/bin/jarvis /usr/lib/aisktagos/*.sh /usr/lib/aisktagos/*.py \
+         /usr/lib/aisktagos/ai/* /etc/xdg/plasma-workspace/env/*.sh 2>/dev/null || true
+# Версия в установщике — из config.env (иначе в 1.1 мастер писал «AIsktagOS 1.0»)
+sed -i -e "s/^\(    version: *\).*/\1${OS_VERSION} ${OS_CODENAME}/" \
+       -e "s/^\(    shortVersion: *\).*/\1\"${OS_VERSION}\"/" \
+       -e "s/^\(    versionedName: *\).*/\1${OS_NAME} ${OS_VERSION}/" \
+       -e "s/^\(    shortVersionedName: *\).*/\1${OS_NAME} ${OS_VERSION}/" \
+       /etc/calamares/branding/aisktagos/branding.desc
 
 # --- lazygit (нет в репозитории Ubuntu 24.04) --------------------------------------
 install_lazygit() {
