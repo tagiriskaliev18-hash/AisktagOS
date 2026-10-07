@@ -125,6 +125,11 @@ def main() -> None:
         if args:
             run_task(agent, " ".join(args))
             return
+        cfg = jv.load_config()
+        if ai.is_local(cfg) and ai.list_models().get("active") == "lite":
+            print(f"{YEL}Сейчас подключена встроенная модель 1.5B: она справляется с простыми задачами (файлы, команды),\n"
+                  f"но путается в многошаговых, особенно в браузере. Лучше: `ai model install standard` (от 8 ГБ памяти)\n"
+                  f"или облачная модель: `jarvis --setup`.{RESET}\n")
         print(f"{BOLD}Джарвис{RESET} — ИИ-агент AIsktagOS. Опишите задачу; /new — новая тема, /yes — не спрашивать, "
               f"/exit — выход.\n{DIM}Команды и запись файлов выполняются только с вашего разрешения.{RESET}\n")
         while True:

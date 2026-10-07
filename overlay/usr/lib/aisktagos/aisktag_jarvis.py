@@ -42,6 +42,7 @@ SYSTEM_PROMPT = """Ты Джарвис — ИИ-агент операционн�
 - В браузере: browser_open → browser_elements (номера элементов) → browser_click / browser_type. После
   перехода на новую страницу номера меняются — снова вызывай browser_elements.
 - Команды пиши для bash в Ubuntu. Для установки пакетов нужен sudo — пользователь увидит запрос.
+- Каждый инструмент вызывай один раз на шаг; не повторяй вызов, который уже выполнен успешно.
 - Когда задача выполнена — коротко скажи, что сделано и где результат. Отвечай по-русски
   (или на языке пользователя).
 
@@ -98,6 +99,16 @@ TOOLS = [
         {"action": S, "index": I, "url": S}, ["action"]),
     _fn("browser_screenshot", "Снимок текущей страницы браузера (для моделей со зрением)."),
 ]
+
+# Для малой локальной модели: всегда доступные инструменты и слова, по которым включается браузер
+CORE_TOOLS = {"list_dir", "read_file", "search_files", "write_file", "edit_file", "run_command", "open_app",
+              "open_path", "screen_read", "clipboard_get", "clipboard_set", "notify"}
+WEB_WORDS = re.compile(r"https?://|www\.|\.(?:com|ru|org|net|io|kz|dev)\b|сайт|браузер|страниц|в интернете|"
+                       r"найди в сети|загугли|поиск в|youtube|github|browser|web|ссылк", re.I)
+
+# Эти вызовы законно повторяются подряд (прокрутка, клавиши, снимок экрана после изменений)
+REPEATABLE = {"browser_scroll", "browser_key", "screen_read", "browser_read", "browser_elements",
+              "browser_screenshot", "run_command"}
 
 # Инструменты, которые меняют систему: перед ними спрашиваем пользователя
 CONFIRM = {"write_file", "edit_file", "run_command"}
@@ -346,7 +357,8 @@ class Tools:
 
     # --- Браузер ----------------------------------------------------------------
     def t_browser_open(self, url: str) -> str:
-        return self.browser.open(url)
+        # Сразу показываем и элементы страницы: модели не нужен лишний шаг browser_elements
+        return self.browser.open(url) + "\nЭлементы страницы:\n" + self.browser.elements()
 
     def t_browser_read(self) -> str:
         return self.browser.read()
@@ -414,20 +426,37 @@ def _request(cfg: dict, messages: list, tools: list | None) -> dict:
         raise ai.AIError("Сервер ИИ вернул непонятный ответ") from e
 
 
-_TEXT_CALL = re.compile(r"<tool_call>\s*(\{.*?\})\s*</tool_call>", re.S)
+_TEXT_CALL = re.compile(r"</?tool_call>")
+TOOL_NAMES = {t["function"]["name"] for t in TOOLS}
 
 
-def _text_tool_calls(content: str) -> list[dict]:
-    """Маленькие модели иногда пишут вызов текстом (<tool_call>{…}</tool_call>) — разбираем и его."""
-    calls = []
-    for i, m in enumerate(_TEXT_CALL.finditer(content or "")):
+def _text_tool_calls(content: str) -> tuple[list[dict], str]:
+    """Малые модели (Qwen2.5-Coder 1.5B) часто пишут вызов текстом: <tool_call>{…}</tool_call>,
+    блоком ```json {"name": …, "arguments": …}``` или голым JSON, а то и целый план из нескольких
+    вызовов. Берём только ПЕРВЫЙ вызов: остальные модель должна решать, увидев его результат.
+    Возвращает (вызовы, текст до вызова)."""
+    text = content or ""
+    dec = json.JSONDecoder()
+    i = text.find("{")
+    while i != -1:
         try:
-            d = json.loads(m.group(1))
-            calls.append({"id": f"text{i}", "type": "function", "function": {
-                "name": d["name"], "arguments": json.dumps(d.get("arguments", {}), ensure_ascii=False)}})
-        except (ValueError, KeyError):
+            d, _end = dec.raw_decode(text, i)
+        except ValueError:
+            i = text.find("{", i + 1)
             continue
-    return calls
+        if isinstance(d, dict) and d.get("name") in TOOL_NAMES:
+            args = d.get("arguments", d.get("parameters", {}))
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except ValueError:
+                    args = {}
+            call = {"id": "text0", "type": "function", "function": {
+                "name": d["name"], "arguments": json.dumps(args if isinstance(args, dict) else {}, ensure_ascii=False)}}
+            before = _TEXT_CALL.sub("", text[:i]).replace("```json", "").replace("```", "").strip()
+            return [call], before
+        i = text.find("{", i + 1)
+    return [], text.strip()
 
 
 def _image_part(path: str) -> dict:
@@ -488,20 +517,41 @@ class Agent:
             self.log.write(f"{time.strftime('%F %T')} [{kind}] {text[:2000]}\n")
             self.log.flush()
 
+    def _tools_for(self, task: str) -> list[dict]:
+        """Маленькой локальной модели 22 инструмента — слишком много: она путается и вызывает лишнее.
+        Ей даём базовый набор, а браузерные инструменты — только когда разговор о сайтах и браузере."""
+        if not ai.is_local(self.cfg) or self.cfg.get("all_tools"):
+            return TOOLS
+        talk = " ".join(m["content"] for m in self.messages if m["role"] == "user" and isinstance(m["content"], str))
+        web_task = bool(WEB_WORDS.search(talk + " " + task))
+        return [t for t in TOOLS if t["function"]["name"].startswith("browser_") == web_task
+                or t["function"]["name"] in CORE_TOOLS]
+
     def ask(self, task: str, should_stop: Callable[[], bool] | None = None) -> str:
         self.messages.append({"role": "user", "content": task})
         self._log("user", task)
+        tools = self._tools_for(task)
+        nudged = False
+        last_key, repeats = "", 0
         for _step in range(int(self.cfg.get("max_steps", 30))):
             if should_stop and should_stop():
                 return "остановлено"
-            msg = _request(self.cfg, self._trim(), TOOLS)
-            calls = msg.get("tool_calls") or _text_tool_calls(msg.get("content") or "")
-            content = _TEXT_CALL.sub("", msg.get("content") or "").strip()
+            msg = _request(self.cfg, self._trim(), tools)
+            calls = msg.get("tool_calls")
+            content = (msg.get("content") or "").strip()
+            if not calls:
+                calls, content = _text_tool_calls(content)
             entry = {"role": "assistant", "content": content or None}
             if calls:
                 entry["tool_calls"] = calls
             self.messages.append(entry)
+            if not calls and not content and not nudged:
+                # Пустой ответ после инструментов (бывает у малых моделей) — просим итог текстом
+                nudged = True
+                self.messages[-1] = {"role": "user", "content": "Кратко ответь пользователю по результатам выше."}
+                continue
             if not calls:
+                content = content or "Готово (модель не дала текстового ответа — см. шаги выше)."
                 self._log("answer", content)
                 self.on_event("answer", content)
                 return content
@@ -517,7 +567,20 @@ class Agent:
                     args = {}
                 self.on_event("tool", f"{name} {json.dumps(args, ensure_ascii=False)[:300]}")
                 self._log("tool", f"{name} {args}")
-                result = self.tools.run(name, args)
+                key = name + json.dumps(args, sort_keys=True, ensure_ascii=False)
+                repeats = repeats + 1 if key == last_key else 0
+                last_key = key
+                if repeats >= 1 and name not in REPEATABLE:
+                    # Малые модели зацикливаются на одном вызове — не выполняем повтор, а подсказываем
+                    result = ("этот вызов только что выполнен с теми же параметрами, результат выше. "
+                              "Не повторяй его: сделай следующий шаг задачи или ответь пользователю.")
+                    if repeats >= 3:
+                        note = "Джарвис зациклился на одном действии и остановлен. Уточните задачу или " \
+                               "подключите модель посильнее (ai model install standard)."
+                        self.on_event("answer", note)
+                        return note
+                else:
+                    result = self.tools.run(name, args)
                 self._log("result", result)
                 self.on_event("result", result)
                 self.messages.append({"role": "tool", "tool_call_id": call.get("id", name), "content": result})

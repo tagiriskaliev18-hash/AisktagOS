@@ -123,7 +123,7 @@ check(any("отказался" in r for r in results), "отказ пользо�
 check(any("a.txt:2" in r for r in results), "вызов инструмента из текста (<tool_call>)")
 check(any("42" in r for r in results), "выполнение команды")
 check(len(asked) == 4, f"подтверждение спрашивается для записи, правки и команд ({len(asked)})")
-check(all(len(r["tools"]) == len(jv.TOOLS) for r in requests), "модель получает список инструментов")
+check(all(len(r["tools"]) >= len(jv.CORE_TOOLS) for r in requests), "модель получает список инструментов")
 check(requests[-1]["messages"][0]["role"] == "system", "системное сообщение на месте")
 if browser:
     check(any("Вы искали: котики" in r for r in results), "браузер: ввод в поле, отправка формы, чтение страницы")
