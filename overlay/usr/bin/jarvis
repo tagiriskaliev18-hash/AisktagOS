@@ -1,158 +1,31 @@
 #!/usr/bin/env python3
-"""jarvis — ИИ-агент AIsktagOS: сам выполняет задачи на компьютере и в браузере.
+"""jarvis — запуск ИИ-агента Джарвиса (справка: jarvis --help).
 
-  jarvis                        диалог (/new — новая задача, /yes — не спрашивать, /exit — выход)
-  jarvis задача…                выполнить одну задачу и выйти
-  jarvis -y задача…             не спрашивать подтверждения команд и записи файлов
-  jarvis --setup                подключить другой сервер ИИ (OpenAI-совместимый)
-  jarvis --status               какая модель и сервер используются
-
-Примеры:
-  jarvis найди в ~/Загрузки все PDF больше 10 МБ и перенеси их в ~/Документы/PDF
-  jarvis открой github.com/trending и перечисли 5 самых популярных репозиториев на Python
-  jarvis посмотри, что у меня на экране, и объясни ошибку
+Код агента берётся из обновления пользователя (~/.local/share/aisktagos/jarvis/lib, ставит
+`jarvis --update`), если там версия новее встроенной в систему, иначе из /usr/lib/aisktagos.
 """
-import json
 import os
+import re
 import sys
 
-try:
-    import readline  # noqa: F401  (история и правка строки)
-except ImportError:
-    pass
-
-sys.path.insert(0, "/usr/lib/aisktagos")
-import aisktag_ai as ai  # noqa: E402
-import aisktag_jarvis as jv  # noqa: E402
-
-TTY = sys.stdout.isatty()
-DIM, BOLD, CYAN, YEL, RED, RESET = (("\033[2m", "\033[1m", "\033[36m", "\033[33m", "\033[31m", "\033[0m")
-                                    if TTY else ("",) * 6)
-auto_yes = False
+SYS_LIB = "/usr/lib/aisktagos"
+USER_LIB = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")),
+                        "aisktagos", "jarvis", "lib")
 
 
-def confirm(name: str, what: str) -> bool:
-    if auto_yes:
-        return True
-    if not sys.stdin.isatty():
-        print(f"{YEL}  ⚠ пропущено (нет терминала для подтверждения): {what}{RESET}")
-        return False
+def version(lib: str) -> tuple:
     try:
-        ans = input(f"{YEL}  ? Джарвис хочет {what}\n    Разрешить? [д/Н/в — всегда] {RESET}").strip().lower()
-    except EOFError:
-        return False
-    if ans in ("в", "всегда", "a", "always"):
-        set_yes(True)
-        return True
-    return ans in ("д", "да", "y", "yes")
+        with open(os.path.join(lib, "aisktag_jarvis.py"), encoding="utf-8") as f:
+            m = re.search(r'^VERSION = "([\d.]+)"', f.read(), re.M)
+        return tuple(int(x) for x in m.group(1).split("."))
+    except (OSError, AttributeError, ValueError):
+        return ()
 
 
-def set_yes(value: bool) -> None:
-    global auto_yes
-    auto_yes = value
-    print(f"{DIM}  (подтверждения {'отключены до конца сеанса' if value else 'включены'}){RESET}")
+sys.path.insert(0, SYS_LIB)                       # aisktag_ai и остальные библиотеки системы
+if os.path.isfile(os.path.join(USER_LIB, "aisktag_jarvis_cli.py")) and version(USER_LIB) > version(SYS_LIB):
+    sys.path.insert(0, USER_LIB)                  # обновление новее встроенной версии
 
+import aisktag_jarvis_cli  # noqa: E402
 
-def on_event(kind: str, text: str) -> None:
-    if kind == "tool":
-        print(f"{CYAN}  ▸ {text}{RESET}")
-    elif kind == "result":
-        lines = text.strip().splitlines()
-        short = "\n    ".join(lines[:6]) + (f"\n    … ещё {len(lines) - 6} строк" if len(lines) > 6 else "")
-        print(f"{DIM}    {short}{RESET}")
-    elif kind == "info":
-        print(f"{DIM}  {text}{RESET}")
-    elif kind == "answer":
-        print(f"\n{BOLD}Джарвис:{RESET} {text}\n")
-
-
-def status() -> None:
-    cfg = jv.load_config()
-    where = "локальная модель Mind" if ai.is_local(cfg) else cfg["base_url"]
-    print(f"Сервер: {where}\nМодель: {cfg['model']}\nЗрение: {'да' if cfg.get('vision') else 'нет (экран читается через распознавание текста)'}")
-    print(f"Настройки: {jv.CONF}")
-    if ai.is_local(cfg):
-        print(f"Состояние локального ИИ: {ai.backend_state()}")
-        print("Совет: для сложных задач лучше модель standard или pro (`ai model`), а ещё лучше — сильная облачная "
-              "модель (`jarvis --setup`). Модель 1.5B часто ошибается в многошаговых задачах.")
-
-
-def setup() -> None:
-    cfg = {}
-    try:
-        cfg = json.loads(jv.CONF.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        pass
-    print("Подключение сервера ИИ для Джарвиса (пустой ответ — оставить как есть, «local» — локальная Mind).")
-    url = input(f"Адрес API (например https://api.openai.com/v1) [{cfg.get('base_url', 'local')}]: ").strip()
-    if url == "local":
-        for k in ("base_url", "model", "api_key"):
-            cfg.pop(k, None)
-    elif url:
-        cfg["base_url"] = url
-        cfg["model"] = input("Модель (например gpt-4o): ").strip() or cfg.get("model", "")
-        cfg["api_key"] = input("Ключ API: ").strip() or cfg.get("api_key", "")
-        cfg["vision"] = input("Модель понимает картинки? [д/Н]: ").strip().lower() in ("д", "да", "y")
-    jv.CONF.parent.mkdir(parents=True, exist_ok=True)
-    jv.CONF.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    jv.CONF.chmod(0o600)
-    print(f"Сохранено в {jv.CONF}")
-
-
-def run_task(agent: jv.Agent, task: str) -> None:
-    try:
-        agent.ask(task)
-    except ai.AIError as e:
-        print(f"{RED}Ошибка: {e}{RESET}")
-    except KeyboardInterrupt:
-        print(f"\n{DIM}  прервано{RESET}")
-
-
-def main() -> None:
-    args = sys.argv[1:]
-    if args and args[0] in ("-h", "--help"):
-        print(__doc__.strip())
-        return
-    if args and args[0] == "--status":
-        return status()
-    if args and args[0] == "--setup":
-        return setup()
-    if args and args[0] in ("-y", "--yes"):
-        args = args[1:]
-        set_yes(True)
-    agent = jv.Agent(confirm, on_event)
-    try:
-        if args:
-            run_task(agent, " ".join(args))
-            return
-        cfg = jv.load_config()
-        if ai.is_local(cfg) and ai.list_models().get("active") == "lite":
-            print(f"{YEL}Сейчас подключена встроенная модель 1.5B: она справляется с простыми задачами (файлы, команды),\n"
-                  f"но путается в многошаговых, особенно в браузере. Лучше: `ai model install standard` (от 8 ГБ памяти)\n"
-                  f"или облачная модель: `jarvis --setup`.{RESET}\n")
-        print(f"{BOLD}Джарвис{RESET} — ИИ-агент AIsktagOS. Опишите задачу; /new — новая тема, /yes — не спрашивать, "
-              f"/exit — выход.\n{DIM}Команды и запись файлов выполняются только с вашего разрешения.{RESET}\n")
-        while True:
-            try:
-                task = input(f"{BOLD}вы ›{RESET} ").strip()
-            except (EOFError, KeyboardInterrupt):
-                print()
-                break
-            if not task:
-                continue
-            if task in ("/exit", "/quit", "выход"):
-                break
-            if task == "/new":
-                agent.reset()
-                print(f"{DIM}  новая тема{RESET}")
-                continue
-            if task == "/yes":
-                set_yes(not auto_yes)
-                continue
-            run_task(agent, task)
-    finally:
-        agent.close()
-
-
-if __name__ == "__main__":
-    main()
+aisktag_jarvis_cli.main()

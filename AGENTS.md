@@ -106,6 +106,7 @@ sudo AI_BUNDLE_MODEL=none SQUASHFS_COMP=zstd ZSTD_LEVEL=3 WORK_DIR=/var/tmp/aisk
 19. **Папка рабочего стола** в русской сессии — «Рабочий стол», а не `~/Desktop` из `/etc/skel`: ярлыки раскладывает `desktop-shortcuts.sh` через `xdg-user-dir DESKTOP`.
 20. **Джарвис на малой памяти:** при MemAvailable < 3 ГБ `aisktag-llm-run` даёт модели контекст 2048, а промпт Джарвиса с 22 инструментами — ~2200 токенов (ошибка 400 `exceed_context_size_error`, найдено в ВМ на 3 ГБ). Агент спрашивает `/props` и при n_ctx < 4096 берёт короткий промпт и 13 инструментов (~1000–1250 токенов), режет вывод инструментов под бюджет.
 21. **Qwen2.5-Coder 1.5B и инструменты:** вызов приходит не в `tool_calls`, а текстом (блок ```json, иногда план из нескольких вызовов); модель повторяет один вызов и «додумывает» результат. Разбор текста, защита от повторов и предупреждение в диалоге — в `aisktag_jarvis.py`; для настоящей работы агента нужна standard/pro или облачная модель.
+22. **Обновление Джарвиса:** `/usr/bin/jarvis` — тонкий запускатель; CLI и агент лежат в `aisktag_jarvis_cli.py`/`aisktag_jarvis.py`. При изменении кода Джарвиса **повышайте `VERSION`** в `aisktag_jarvis.py`: по ней `jarvis --update` и запускатель решают, брать ли код из `~/.local/share/aisktagos/jarvis/lib`. Архив `jarvis-update.tar.gz` собирает `tools/release/make-jarvis-update.sh` в CI.
 
 ## Что делать дальше (приоритеты)
 
