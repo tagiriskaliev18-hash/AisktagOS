@@ -3,7 +3,8 @@
   jarvis                        диалог (/new — новая задача, /yes — не спрашивать, /exit — выход)
   jarvis задача…                выполнить одну задачу и выйти
   jarvis -y задача…             не спрашивать подтверждения команд и записи файлов
-  jarvis --setup                подключить другой сервер ИИ (OpenAI-совместимый)
+  jarvis --setup                подключить быструю нейросеть (Groq — ответ за доли секунды) или свою
+  jarvis --setup groq КЛЮЧ      то же без вопросов
   jarvis --status               какая модель и сервер используются
   jarvis --update               обновить Джарвиса из последнего релиза AIsktagOS на GitHub
 
@@ -21,8 +22,10 @@ import shutil
 import sys
 import tarfile
 import tempfile
+import subprocess
 import threading
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -139,26 +142,123 @@ def status() -> None:
               "модель (`jarvis --setup`). Модель 1.5B часто ошибается в многошаговых задачах.")
 
 
-def setup() -> None:
+# Быстрые облачные серверы с вызовом инструментов. Модели берутся из списка сервера (/models): первая
+# доступная из предпочтительных — списки у провайдеров меняются, жёстко зашитое имя быстро устаревает.
+PROVIDERS = {
+    "groq": ("Groq — мгновенные ответы (≈0,5 с), бесплатный ключ", "https://api.groq.com/openai/v1",
+             "https://console.groq.com/keys",
+             ["openai/gpt-oss-120b", "llama-3.3-70b-versatile", "moonshotai/kimi-k2-instruct", "qwen/qwen3-32b",
+              "openai/gpt-oss-20b", "llama-3.1-8b-instant"]),
+    "openrouter": ("OpenRouter — сотни моделей, есть бесплатные", "https://openrouter.ai/api/v1",
+                   "https://openrouter.ai/keys",
+                   ["openai/gpt-4.1-mini", "google/gemini-2.5-flash", "anthropic/claude-sonnet-4", "openai/gpt-4o-mini"]),
+    "openai": ("OpenAI", "https://api.openai.com/v1", "https://platform.openai.com/api-keys",
+               ["gpt-4.1-mini", "gpt-4o-mini", "gpt-4.1", "gpt-4o"]),
+}
+
+
+def _api(url: str, key: str, body: dict | None = None, timeout: float = 30) -> dict:
+    req = urllib.request.Request(url, data=json.dumps(body).encode() if body else None, method="POST" if body else "GET",
+                                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json",
+                                          "User-Agent": "aisktagos-jarvis"})
+    with urllib.request.urlopen(req, timeout=timeout) as r:
+        return json.loads(r.read())
+
+
+def connect(provider: str, key: str, model: str = "") -> bool:
+    """Проверить ключ, выбрать модель и сохранить в jarvis.json. True — всё работает."""
+    title, base, _, preferred = PROVIDERS[provider]
+    name = title.split(" —")[0]
+    try:
+        ids = [m["id"] for m in _api(base + "/models", key).get("data", [])]
+    except urllib.error.HTTPError as e:
+        print(f"{RED}{name}: ключ не подошёл (ошибка {e.code}). Проверьте, что скопировали его целиком.{RESET}")
+        return False
+    except (OSError, ValueError) as e:
+        print(f"{RED}Нет связи с {base}: {e}{RESET}")
+        return False
+    model = model or next((m for m in preferred if m in ids), ids[0] if ids else "")
+    if not model:
+        print(f"{RED}Сервер не вернул ни одной модели.{RESET}")
+        return False
+    t0 = time.time()
+    try:
+        _api(base + "/chat/completions", key, {"model": model, "max_tokens": 8,
+                                                "messages": [{"role": "user", "content": "Ответь одним словом: ок"}]})
+    except (OSError, ValueError) as e:
+        print(f"{RED}Модель {model} не ответила: {e}{RESET}")
+        return False
     cfg = {}
     try:
         cfg = json.loads(jv.CONF.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         pass
-    print("Подключение сервера ИИ для Джарвиса (пустой ответ — оставить как есть, «local» — локальная Mind).")
-    url = input(f"Адрес API (например https://api.openai.com/v1) [{cfg.get('base_url', 'local')}]: ").strip()
-    if url == "local":
-        for k in ("base_url", "model", "api_key"):
-            cfg.pop(k, None)
-    elif url:
-        cfg["base_url"] = url
-        cfg["model"] = input("Модель (например gpt-4o): ").strip() or cfg.get("model", "")
-        cfg["api_key"] = input("Ключ API: ").strip() or cfg.get("api_key", "")
-        cfg["vision"] = input("Модель понимает картинки? [д/Н]: ").strip().lower() in ("д", "да", "y")
+    cfg.update(base_url=base, model=model, api_key=key, vision=False)
     jv.CONF.parent.mkdir(parents=True, exist_ok=True)
     jv.CONF.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     jv.CONF.chmod(0o600)
-    print(f"Сохранено в {jv.CONF}")
+    print(f"{BOLD}Готово:{RESET} Джарвис работает через {name}, модель {model} "
+          f"(ответ за {time.time() - t0:.1f} с). Ключ сохранён в {jv.CONF} (доступен только вам).")
+    return True
+
+
+def setup(args: list[str] | None = None) -> None:
+    """jarvis --setup                 — выбрать сервер в диалоге
+    jarvis --setup groq КЛЮЧ       — сразу подключить (также openrouter, openai, local)"""
+    args = args or []
+    if args and args[0] == "local":
+        cfg = {}
+        try:
+            cfg = json.loads(jv.CONF.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+        for k in ("base_url", "model", "api_key"):
+            cfg.pop(k, None)
+        jv.CONF.parent.mkdir(parents=True, exist_ok=True)
+        jv.CONF.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print("Джарвис снова работает на встроенной модели (без интернета).")
+        return
+    if args and args[0] in PROVIDERS:
+        key = args[1] if len(args) > 1 else input("Ключ API: ").strip()
+        connect(args[0], key, args[2] if len(args) > 2 else "")
+        return
+    print(f"{BOLD}Какую нейросеть подключить Джарвису?{RESET}")
+    names = list(PROVIDERS)
+    for i, n in enumerate(names, 1):
+        print(f"  {i}. {PROVIDERS[n][0]}")
+    print(f"  {len(names) + 1}. Встроенная модель (без интернета, медленнее)")
+    print(f"  {len(names) + 2}. Другой OpenAI-совместимый сервер (Ollama, LM Studio, свой)")
+    ans = input("Номер [1]: ").strip() or "1"
+    if ans == str(len(names) + 1):
+        return setup(["local"])
+    if ans == str(len(names) + 2):
+        cfg = {}
+        try:
+            cfg = json.loads(jv.CONF.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            pass
+        cfg["base_url"] = input("Адрес API (например http://localhost:11434/v1): ").strip()
+        cfg["model"] = input("Модель: ").strip()
+        cfg["api_key"] = input("Ключ API (если нужен): ").strip()
+        cfg["vision"] = input("Модель понимает картинки? [д/Н]: ").strip().lower() in ("д", "да", "y")
+        jv.CONF.parent.mkdir(parents=True, exist_ok=True)
+        jv.CONF.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        jv.CONF.chmod(0o600)
+        print(f"Сохранено в {jv.CONF}")
+        return
+    try:
+        prov = names[int(ans) - 1]
+    except (ValueError, IndexError):
+        print("Нет такого пункта.")
+        return
+    title, _, keys_url, _ = PROVIDERS[prov]
+    print(f"Ключ можно получить бесплатно за минуту: {keys_url}  (войдите и нажмите «Create API Key»)")
+    if shutil.which("xdg-open") and input("Открыть эту страницу в браузере? [Д/н]: ").strip().lower() not in ("н", "n"):
+        subprocess.Popen(["xdg-open", keys_url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                         start_new_session=True)
+    key = input("Вставьте ключ (Ctrl+Shift+V): ").strip()
+    if key:
+        connect(prov, key)
 
 
 # --- Обновление без переустановки ОС ----------------------------------------------
@@ -293,7 +393,7 @@ def main() -> None:
     if args and args[0] == "--status":
         return status()
     if args and args[0] == "--setup":
-        return setup()
+        return setup(args[1:])
     if args and args[0] == "--update":
         update()
         return
@@ -310,12 +410,25 @@ def main() -> None:
             return
         auto_update()
         cfg = jv.load_config()
-        if ai.is_local(cfg) and ai.list_models().get("active") == "lite":
-            print(f"{YEL}Сейчас подключена встроенная модель 1.5B: она справляется с простыми задачами (файлы, команды),\n"
-                  f"но путается в многошаговых, особенно в браузере. Лучше: `ai model install standard` (от 8 ГБ памяти)\n"
-                  f"или облачная модель: `jarvis --setup`.{RESET}\n")
-        print(f"{BOLD}Джарвис{RESET} — ИИ-агент AIsktagOS. Опишите задачу; /new — новая тема, /yes — не спрашивать, "
-              f"/exit — выход.\n{DIM}Команды и запись файлов выполняются только с вашего разрешения.{RESET}\n")
+        if ai.is_local(cfg):
+            # Будим локальную модель заранее, пока человек печатает первый вопрос
+            threading.Thread(target=jv.server_ctx, args=(cfg,), daemon=True).start()
+            offered = USER_DIR / "cloud-offered"
+            if not offered.exists() and sys.stdin.isatty():
+                USER_DIR.mkdir(parents=True, exist_ok=True)
+                offered.touch()
+                print(f"{YEL}Встроенная модель работает без интернета, но на процессоре: ответ — секунды, а сложные задачи\n"
+                      f"ей не по силам. Для мгновенных ответов и действий подключите Groq (бесплатно, ~1 минута).{RESET}")
+                if input("Подключить сейчас? [Д/н]: ").strip().lower() not in ("н", "n", "нет", "no"):
+                    setup()
+                    agent.cfg = jv.load_config()
+                    agent._ctx_checked = False
+                print()
+            elif ai.list_models().get("active") == "lite":
+                print(f"{DIM}Совет: мгновенные ответы и сложные задачи — `jarvis --setup` (Groq, бесплатно). "
+                      f"Простые команды («открой Firefox», «громче», «сколько памяти») выполняются сразу.{RESET}\n")
+        print(f"{BOLD}Джарвис{RESET} — ИИ-агент AIsktagOS. Опишите задачу; /new — новая тема, /setup — сменить нейросеть, "
+              f"/yes — не спрашивать, /exit — выход.\n{DIM}Команды и запись файлов выполняются только с вашего разрешения.{RESET}\n")
         while True:
             try:
                 task = input(f"{BOLD}вы ›{RESET} ").strip()
@@ -329,6 +442,11 @@ def main() -> None:
             if task == "/new":
                 agent.reset()
                 print(f"{DIM}  новая тема{RESET}")
+                continue
+            if task == "/setup":
+                setup()
+                agent.cfg = jv.load_config()
+                agent._ctx_checked = False
                 continue
             if task == "/yes":
                 set_yes(not auto_yes)

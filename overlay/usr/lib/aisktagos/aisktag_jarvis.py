@@ -26,9 +26,10 @@ from typing import Callable
 
 import aisktag_ai as ai
 import aisktag_browser as web
+import aisktag_jarvis_fast as fast
 
 # Версия кода Джарвиса: по ней `jarvis --update` решает, новее ли версия из релиза на GitHub
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 CONF = ai.USER_CONF.parent / "jarvis.json"
 LOG_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "aisktagos"
 TOOL_OUTPUT_LIMIT = 8000
@@ -497,12 +498,14 @@ def _request(cfg: dict, messages: list, tools: list | None) -> dict:
                 continue
             raise ai.AIError(f"Сервер ИИ ответил ошибкой {e.code}: {detail}") from e
         except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
-            if local and not isinstance(e, TimeoutError) and time.time() < deadline:
-                time.sleep(2)                                     # служба модели перезапускается
+            refused = isinstance(getattr(e, "reason", e), ConnectionRefusedError) or isinstance(e, ConnectionRefusedError)
+            if local and not refused and not isinstance(e, TimeoutError) and time.time() < deadline:
+                time.sleep(2)                                     # служба модели перезапускается (обрыв)
                 continue
             if local:
                 raise ai.AIError("Локальная модель не отвечает: проверьте `ai status` (возможно, модель не "
-                                 "установлена или не хватает памяти: `ai model`).") from e
+                                 "установлена или не хватает памяти: `ai model`) или подключите быструю облачную: "
+                                 "jarvis --setup") from e
             raise ai.AIError(f"Не удалось подключиться к {cfg['base_url']}: {getattr(e, 'reason', e)}") from e
         except (ValueError, KeyError, IndexError) as e:
             raise ai.AIError("Сервер ИИ вернул непонятный ответ") from e
@@ -696,6 +699,17 @@ class Agent:
         return answer
 
     def ask(self, task: str, should_stop: Callable[[], bool] | None = None) -> str:
+        # Мгновенные команды (открой, громче, скриншот, сколько памяти…) — без модели, за доли секунды
+        if not self.cfg.get("no_fast"):
+            try:
+                quick = fast.handle(task, self.tools, self.tools.confirm)
+            except OSError as e:
+                quick = f"Не получилось: {e}"
+            if quick:
+                self.messages += [{"role": "user", "content": task}, {"role": "assistant", "content": quick}]
+                self._log("fast", f"{task} → {quick}")
+                self.on_event("answer", quick)
+                return quick
         self._check_ctx()
         # Малой локальной модели вопросы без действий отдаём в режим беседы: быстрее в разы
         # (нет 1–2 тыс. токенов описания инструментов) и без путаницы с вызовами

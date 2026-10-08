@@ -9,7 +9,7 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 mkdir -p "$tmp/lib" "$tmp/bin" "$tmp/share" "$out"
 o="$root/overlay"
-cp "$o"/usr/lib/aisktagos/{aisktag_jarvis.py,aisktag_jarvis_cli.py,aisktag_browser.py,aisktag_ai.py} "$tmp/lib/"
+cp "$o"/usr/lib/aisktagos/{aisktag_jarvis.py,aisktag_jarvis_cli.py,aisktag_jarvis_fast.py,aisktag_browser.py,aisktag_ai.py} "$tmp/lib/"
 cp "$o/usr/bin/jarvis" "$tmp/bin/"
 cp "$o/usr/share/applications/aisktag-jarvis.desktop" "$o/usr/share/icons/hicolor/scalable/apps/aisktagos-jarvis.svg" "$tmp/share/"
 for f in "$tmp"/lib/*.py "$tmp/bin/jarvis"; do python3 -m py_compile "$f"; done

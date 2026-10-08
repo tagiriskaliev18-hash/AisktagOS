@@ -108,6 +108,13 @@ finally:
 
 results = [t for k, t in events if k == "result"]
 
+# Мгновенные команды: отвечают без обращения к модели
+agent2 = jv.Agent(confirm, lambda kind, text: None)
+before = len(requests)
+quick = agent2.ask("Джарвис, который час?")
+quick_mem = agent2.ask("сколько свободной памяти")
+agent2.close()
+
 
 def check(cond, what):
     print(("OK   " if cond else "FAIL ") + what)
@@ -125,6 +132,8 @@ check(any("42" in r for r in results), "выполнение команды")
 check(len(asked) == 4, f"подтверждение спрашивается для записи, правки и команд ({len(asked)})")
 check(all(len(r["tools"]) >= len(jv.CORE_TOOLS) for r in requests), "модель получает список инструментов")
 check(requests[-1]["messages"][0]["role"] == "system", "системное сообщение на месте")
+check(quick.startswith("Сейчас") and "ГБ" in quick_mem and len(requests) == before,
+      "мгновенные команды без модели (время, память)")
 if browser:
     check(any("Вы искали: котики" in r for r in results), "браузер: ввод в поле, отправка формы, чтение страницы")
 print("Журнал:", TMP / ".local/state/aisktagos/jarvis.log")
