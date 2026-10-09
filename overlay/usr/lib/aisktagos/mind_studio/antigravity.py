@@ -36,6 +36,7 @@ from . import store
 
 ROOT = Path(os.environ.get("ANTIGRAVITY_DATA", Path.home() / ".gemini" / "antigravity"))
 LINK_FILE = store.DATA / "antigravity-link.json"
+LINK_ERR = store.DATA / "antigravity-link.error"     # почему мост не запустился (видно в Mind Studio)
 MODELS = {"flash_lite": "Gemini Flash Lite", "flash": "Gemini Flash", "pro": "Gemini Pro"}
 UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
 
@@ -152,10 +153,26 @@ def run_agentapi(args: list[str], timeout: int = 120) -> dict:
 
 def serve_link(port: int = 0) -> int:
     """Запускает мост. Возвращает код выхода (вызывается из командной строки)."""
+    store.DATA.mkdir(parents=True, exist_ok=True)
     if not (os.environ.get("ANTIGRAVITY_LS_ADDRESS") and os.environ.get("ANTIGRAVITY_CSRF_TOKEN")):
-        print("Мост нужно запускать из терминала Antigravity: только там есть его адрес и токен.\n"
-              "Откройте в Antigravity Terminal → New Terminal и выполните эту же команду.", file=sys.stderr)
+        msg = ("Мост запущен не агентом Antigravity: в этом окне нет адреса и токена Antigravity. "
+               "Отправьте просьбу из раздела «Агенты» в чат Antigravity — его агент запустит мост сам.")
+        LINK_ERR.write_text(json.dumps({"error": msg, "time": time.time()}, ensure_ascii=False), encoding="utf-8")
+        print(msg, file=sys.stderr)
         return 2
+    try:
+        run_agentapi(["get-conversation-metadata", "00000000-0000-0000-0000-000000000000"], timeout=20)
+    except AntigravityError as e:
+        # «разговор не найден» означает, что связь есть; ошибки CSRF и адреса — что её нет
+        if any(w in str(e) for w in ("CSRF", "Unauthenticated", "Unavailable", "LS_ADDRESS", "language_server")):
+            msg = f"Antigravity не принял мост: {e}"
+            LINK_ERR.write_text(json.dumps({"error": msg, "time": time.time()}, ensure_ascii=False), encoding="utf-8")
+            print(msg, file=sys.stderr)
+            return 3
+    try:
+        LINK_ERR.unlink()
+    except OSError:
+        pass
     secret = secrets.token_urlsafe(24)
 
     class H(BaseHTTPRequestHandler):
@@ -249,6 +266,15 @@ def _call(method: str, path: str, data: dict | None = None, timeout: float = 3) 
         raise AntigravityError(str(msg)) from e
     except (urllib.error.URLError, OSError) as e:
         raise AntigravityError("мост не отвечает — запустите его снова из терминала Antigravity") from e
+
+
+def last_error() -> str:
+    """Причина последней неудачной попытки запустить мост (за последний час)."""
+    try:
+        d = json.loads(LINK_ERR.read_text(encoding="utf-8"))
+        return d["error"] if time.time() - d.get("time", 0) < 3600 else ""
+    except (OSError, ValueError, KeyError):
+        return ""
 
 
 def linked() -> bool:

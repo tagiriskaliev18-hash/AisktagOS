@@ -49,8 +49,8 @@ def status() -> dict:
                    else "Claude Code не установлен"},
         "antigravity": {"ready": antigravity.linked(), "installed": antigravity.installed(),
                         "detail": "мост подключён" if antigravity.linked() else
-                        ("запустите мост из терминала Antigravity" if antigravity.installed()
-                         else "Antigravity не найден")},
+                        (antigravity.last_error() or "попросите агента Antigravity запустить мост")
+                        if antigravity.installed() else "Antigravity не найден"},
     }
 
 

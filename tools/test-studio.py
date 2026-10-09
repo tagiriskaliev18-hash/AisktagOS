@@ -318,6 +318,7 @@ class StudioUI(unittest.TestCase):
         p.click("[data-view=agents]")
         p.wait_for_selector(".card")
         self.assertIn("--link-antigravity", p.locator("pre.howto").inner_text())
+        self.assertIn("фоновом", p.locator("pre.howto").inner_text())
         self.shot("8-agents")
 
     def test_9_no_js_errors(self):
