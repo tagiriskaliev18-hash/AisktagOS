@@ -1,5 +1,5 @@
 {
-  "_comment": "Каталог моделей Mind. Единый источник правды. Только Apache-2.0/MIT: модели можно свободно распространять в составе ОС. Облачные модели подключаются через API-ключ, не требуют локальной RAM.",
+  "_comment": "models — локальные GGUF-модели (их читают aisktag-llm-run, aisktag-ai-model и сборка). cloud — облачные модели для справки и меню Mind; ключи API не хранятся здесь никогда.",
   "default": "lite",
   "models": [
     {
@@ -49,9 +49,10 @@
       "bundled": false,
       "provider": "local",
       "tag": "local"
-    },
+    }
+  ],
+  "cloud": [
     {
-      "_comment": "=== NVIDIA NIM — облачные модели, требуют NVIDIA_API_KEY ===",
       "id": "nvidia_codestral_22b",
       "name": "Codestral 22B",
       "title": "Codestral 22B · NVIDIA",
@@ -63,7 +64,10 @@
       "bundled": false,
       "provider": "nvidia",
       "tag": "coding",
-      "best_for": ["code", "autocomplete"]
+      "best_for": [
+        "code",
+        "autocomplete"
+      ]
     },
     {
       "id": "nvidia_qwen_coder_32b",
@@ -77,7 +81,11 @@
       "bundled": false,
       "provider": "nvidia",
       "tag": "coding",
-      "best_for": ["code", "review", "refactor"]
+      "best_for": [
+        "code",
+        "review",
+        "refactor"
+      ]
     },
     {
       "id": "nvidia_llama_70b",
@@ -91,7 +99,11 @@
       "bundled": false,
       "provider": "nvidia",
       "tag": "general",
-      "best_for": ["code", "design", "explain"]
+      "best_for": [
+        "code",
+        "design",
+        "explain"
+      ]
     },
     {
       "id": "nvidia_nemotron_70b",
@@ -105,7 +117,11 @@
       "bundled": false,
       "provider": "nvidia",
       "tag": "coding",
-      "best_for": ["code", "reasoning", "review"]
+      "best_for": [
+        "code",
+        "reasoning",
+        "review"
+      ]
     },
     {
       "id": "nvidia_nemotron_ultra_253b",
@@ -119,7 +135,12 @@
       "bundled": false,
       "provider": "nvidia",
       "tag": "flagship",
-      "best_for": ["code", "architecture", "design", "reasoning"]
+      "best_for": [
+        "code",
+        "architecture",
+        "design",
+        "reasoning"
+      ]
     },
     {
       "id": "nvidia_llama_405b",
@@ -133,7 +154,12 @@
       "bundled": false,
       "provider": "nvidia",
       "tag": "flagship",
-      "best_for": ["code", "design", "architecture", "explain"]
+      "best_for": [
+        "code",
+        "design",
+        "architecture",
+        "explain"
+      ]
     },
     {
       "id": "nvidia_deepseek_r1_671b",
@@ -147,7 +173,12 @@
       "bundled": false,
       "provider": "nvidia",
       "tag": "flagship",
-      "best_for": ["code", "reasoning", "algorithms", "architecture"]
+      "best_for": [
+        "code",
+        "reasoning",
+        "algorithms",
+        "architecture"
+      ]
     },
     {
       "id": "nvidia_mixtral_8x22b",
@@ -161,7 +192,11 @@
       "bundled": false,
       "provider": "nvidia",
       "tag": "general",
-      "best_for": ["code", "content", "design"]
+      "best_for": [
+        "code",
+        "content",
+        "design"
+      ]
     },
     {
       "id": "nvidia_phi4_multimodal",
@@ -175,47 +210,63 @@
       "bundled": false,
       "provider": "nvidia",
       "tag": "design",
-      "best_for": ["design", "vision", "ui-analysis"]
+      "best_for": [
+        "design",
+        "vision",
+        "ui-analysis"
+      ]
     },
     {
-      "_comment": "=== Claude (Anthropic) — требуют CLAUDE_API_KEY ===",
       "id": "claude_opus",
-      "name": "Claude Opus 4.5",
+      "name": "Claude Opus 5.5",
       "title": "Claude Opus · Anthropic",
       "description": "Флагман Anthropic: лучший в глубоком понимании кода, архитектурных решениях и творческих задачах. 200k токенов контекста.",
-      "model_id": "claude-opus-4-5",
+      "model_id": "claude-opus-5-5",
       "ctx": 200000,
       "license": "Proprietary",
       "bundled": false,
       "provider": "claude",
       "tag": "flagship",
-      "best_for": ["code", "architecture", "design", "writing"]
+      "best_for": [
+        "code",
+        "architecture",
+        "design",
+        "writing"
+      ]
     },
     {
       "id": "claude_sonnet",
-      "name": "Claude Sonnet 4.5",
+      "name": "Claude Sonnet 5.5",
       "title": "Claude Sonnet · Anthropic",
       "description": "Лучший баланс скорости и качества от Anthropic. Рекомендуется для большинства задач кодинга и дизайна.",
-      "model_id": "claude-sonnet-4-5",
+      "model_id": "claude-sonnet-5-5",
       "ctx": 200000,
       "license": "Proprietary",
       "bundled": false,
       "provider": "claude",
       "tag": "recommended",
-      "best_for": ["code", "design", "explain"]
+      "best_for": [
+        "code",
+        "design",
+        "explain"
+      ]
     },
     {
       "id": "claude_haiku",
-      "name": "Claude Haiku 4.5",
+      "name": "Claude Haiku 5.5",
       "title": "Claude Haiku · Anthropic",
       "description": "Молниеносный Claude: быстрые правки, автодополнение, короткие вопросы. Самый доступный из Claude.",
-      "model_id": "claude-haiku-4-5",
+      "model_id": "claude-haiku-5-5",
       "ctx": 200000,
       "license": "Proprietary",
       "bundled": false,
       "provider": "claude",
       "tag": "fast",
-      "best_for": ["autocomplete", "quick-fix", "explain"]
+      "best_for": [
+        "autocomplete",
+        "quick-fix",
+        "explain"
+      ]
     }
   ]
 }

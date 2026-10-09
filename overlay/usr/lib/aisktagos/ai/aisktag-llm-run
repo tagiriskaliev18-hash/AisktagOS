@@ -76,4 +76,4 @@ echo "aisktag-llm: модель=$model движок=$backend контекст=$c
 export LD_LIBRARY_PATH="$LLAMA/$backend${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 # shellcheck disable=SC2086
 exec "$bin" -m "$model" --alias aisktag-mind --host 127.0.0.1 --port "$PORT" \
-    -c "$ctx" -t "$threads" --cache-ram 512 --flash-attn $AI_EXTRA_ARGS
+    -c "$ctx" -t "$threads" --cache-ram 512 --flash-attn auto $AI_EXTRA_ARGS
