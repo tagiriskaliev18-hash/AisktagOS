@@ -10,7 +10,7 @@ Item {
 
     Plasmoid.preferredRepresentation: Plasmoid.compactRepresentation
     Plasmoid.toolTipMainText: "AIsktag Mind & Dev HUD"
-    Plasmoid.toolTipSubText: aiActive ? "Модель: Активна" : "Модель: Спит"
+    Plasmoid.toolTipSubText: aiActive ? "РњРѕРґРµР»СЊ: РђРєС‚РёРІРЅР°" : "РњРѕРґРµР»СЊ: РЎРїРёС‚"
 
     property bool aiActive: false
 
@@ -38,6 +38,7 @@ Item {
     Sensors.Sensor { id: cpuSensor; sensorId: "cpu/all/usage"; updateRateLimit: 1000 }
     Sensors.Sensor { id: ramSensor; sensorId: "memory/physical/used"; updateRateLimit: 1000 }
     Sensors.Sensor { id: ramTotalSensor; sensorId: "memory/physical/total"; updateRateLimit: 1000 }
+    Sensors.Sensor { id: tempSensor; sensorId: "cpu/all/averageTemperature"; updateRateLimit: 1000 }
 
     Plasmoid.compactRepresentation: Item {
         PlasmaCore.IconItem {
@@ -69,9 +70,9 @@ Item {
             }
 
             RowLayout {
-                PlasmaComponents.Label { text: "ИИ Mind:" ; Layout.fillWidth: true }
+                PlasmaComponents.Label { text: "РР Mind:" ; Layout.fillWidth: true }
                 PlasmaComponents.Label {
-                    text: root.aiActive ? "В памяти" : "Спит"
+                    text: root.aiActive ? "Р’ РїР°РјСЏС‚Рё" : "РЎРїРёС‚"
                     color: root.aiActive ? "#5be37a" : "#8f9abf"
                     font.bold: true
                 }
@@ -79,16 +80,20 @@ Item {
 
             RowLayout {
                 PlasmaComponents.Label { text: "CPU:" ; Layout.fillWidth: true }
-                PlasmaComponents.Label { text: cpuSensor.formattedValue || "—" }
+                PlasmaComponents.Label { text: cpuSensor.formattedValue || "вЂ”" }
             }
 
             RowLayout {
                 PlasmaComponents.Label { text: "RAM:" ; Layout.fillWidth: true }
-                PlasmaComponents.Label { text: (ramSensor.formattedValue || "—") + " / " + (ramTotalSensor.formattedValue || "—") }
+                PlasmaComponents.Label { text: (ramSensor.formattedValue || "вЂ”") + " / " + (ramTotalSensor.formattedValue || "вЂ”") }
+            }
+
+            RowLayout {
+                PlasmaComponents.Label { text: "Temp:" ; Layout.fillWidth: true }
+                PlasmaComponents.Label { text: tempSensor.formattedValue || "вЂ”" }
             }
 
             Item { Layout.fillHeight: true }
         }
     }
 }
-
