@@ -513,7 +513,8 @@ class AIPage(QWidget):
         cfg = ai.load_config()
         cfg.update(base_url=self.f_url.text().strip() or ai.LOCAL_URL, model=self.f_model.text().strip() or "aisktag-mind",
                    api_key=self.f_key.text().strip())
-        cfg["provider"] = "local" if cfg["base_url"].startswith("http://127.0.0.1") else "external"
+        # Локальный адрес — режим «авто»: локальная модель плюс облачные ключи, если они есть
+        cfg["provider"] = "auto" if cfg["base_url"].startswith("http://127.0.0.1") else "external"
         ai.save_config(cfg)
         self.build()
 

@@ -281,8 +281,14 @@ def cmd_status(args: list[str]) -> None:
     cfg = ai.load_config()
     labels = {"ready": "готова (модель загружена)", "loading": "загружается…",
               "idle": "спит — проснётся по первому запросу", "missing": "служба не запущена"}
-    st = ai.backend_state() if ai.is_local(cfg) else None
-    print(f"{BOLD}Подключение:{RESET} {cfg['base_url']}  ({'локально' if ai.is_local(cfg) else 'внешний сервер'})")
+    if cfg.get("provider") == "auto":
+        have = ai.available_providers(cfg)
+        names = ", ".join(ai.PROVIDERS[p]["title"] for p in have) or "нет — добавьте ключ API или запустите модель"
+        print(f"{BOLD}Режим:{RESET}       авто — модель под задачу, бесплатные первыми, резерв при лимите")
+        print(f"{BOLD}Доступны:{RESET}    {names}")
+    st = ai.backend_state() if ai.is_local(cfg) or cfg.get("provider") == "auto" else None
+    if cfg.get("provider") != "auto":
+        print(f"{BOLD}Подключение:{RESET} {cfg['base_url']}  ({'локально' if ai.is_local(cfg) else 'внешний сервер'})")
     if st:
         info = ai.list_models()
         print(f"{BOLD}Состояние:{RESET}   {labels[st]}")

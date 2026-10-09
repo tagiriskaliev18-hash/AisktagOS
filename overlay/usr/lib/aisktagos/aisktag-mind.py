@@ -5,8 +5,10 @@
     aisktag-mind --clipboard         открыть и вложить текст из буфера обмена
     aisktag-mind --ask "вопрос"      открыть и сразу спросить
 
-Работает с локальной моделью (она просыпается по первому запросу) или с любым OpenAI-совместимым
-сервером из ~/.config/aisktagos/ai.json. Окно одно: повторный запуск показывает уже открытое.
+Режим «Авто» сам выбирает модель под задачу: простые вопросы — быстрой бесплатной модели, код и сложные
+задачи — сильной, платные (Claude, OpenAI) — только если другие недоступны. При лимите или сбое ответ
+перехватывает следующая модель. «Консилиум» спрашивает несколько моделей сразу и сводит лучший ответ.
+Ключи API — в «Настройках ИИ» или в переменных окружения. Окно одно: повторный запуск показывает уже открытое.
 """
 import os
 import subprocess
@@ -15,16 +17,26 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 sys.path.insert(0, "/usr/lib/aisktagos")
+sys.path.insert(0, str(Path(__file__).resolve().parent))   # Windows и запуск из репозитория
 import aisktag_ai as ai  # noqa: E402
 import aisktag_theme as T  # noqa: E402
 from PyQt6.QtCore import QEvent, QObject, Qt, QThread, QTimer, pyqtSignal  # noqa: E402
 from PyQt6.QtGui import QGuiApplication, QIcon, QKeySequence, QShortcut  # noqa: E402
 from PyQt6.QtNetwork import QLocalServer, QLocalSocket  # noqa: E402
-from PyQt6.QtWidgets import (QApplication, QComboBox, QFileDialog, QFrame, QHBoxLayout, QLabel,  # noqa: E402
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,  # noqa: E402
+                             QFileDialog, QFormLayout, QFrame, QHBoxLayout, QLabel, QLineEdit,
                              QPlainTextEdit, QPushButton, QScrollArea, QTextBrowser, QVBoxLayout, QWidget)
 
 MAX_ATTACH = 200_000        # символов вложения: больше малой модели не переварить
-HISTORY_LIMIT = 14          # сколько последних сообщений отправлять модели
+HISTORY_LIMIT = 24          # сколько последних сообщений отдавать маршрутизатору (он урежет для простых вопросов)
+# Режимы ответа: (подпись, mode, tier)
+MODES = [
+    ("Авто — экономно", "auto", None),
+    ("Быстро", "auto", "fast"),
+    ("Код", "auto", "code"),
+    ("Максимум", "auto", "deep"),
+    ("Консилиум моделей", "council", None),
+]
 SUGGESTIONS = [
     ("Объясни ошибку из буфера", "Объясни эту ошибку и предложи исправление:"),
     ("Напиши юнит-тест", "Напиши юнит-тесты для этого кода:"),
@@ -37,6 +49,7 @@ QFrame[role="assistant"] {{ background: {T.C['surface']}; border: 1px solid {T.r
 QTextBrowser {{ background: transparent; border: none; padding: 0; selection-background-color: {T.C['accent']}; }}
 QLabel#who {{ font-size: 9pt; font-weight: 600; letter-spacing: 1px; }}
 QLabel#chip {{ background: {T.C['surface']}; border: 1px solid {T.rgba('focus', 0.18)}; border-radius: 12px; padding: 3px 10px; }}
+QLabel#route {{ font-size: 8pt; color: {T.C['muted']}; }}
 QLabel#attach {{ background: {T.rgba('ai', 0.2)}; border: 1px solid {T.rgba('aiText', 0.4)}; border-radius: 10px; padding: 3px 10px; color: {T.C['aiText']}; }}
 QPushButton#suggest {{ text-align: left; padding: 10px 14px; border-radius: 12px; background: {T.C['surface']}; }}
 QPlainTextEdit#input {{ border-radius: 14px; padding: 10px 12px; }}
@@ -47,14 +60,16 @@ class Worker(QThread):
     """Читает поток ответа модели в отдельном потоке, чтобы окно не зависало."""
     chunk = pyqtSignal(str)
     failed = pyqtSignal(str)
+    routed = pyqtSignal(dict)
 
-    def __init__(self, messages: list, cfg: dict):
+    def __init__(self, messages: list, cfg: dict, **opts):
         super().__init__()
-        self.messages, self.cfg, self._stop = messages, cfg, False
+        self.messages, self.cfg, self.opts, self._stop = messages, cfg, opts, False
 
     def run(self) -> None:
         try:
-            for piece in ai.stream_chat(self.messages, self.cfg, should_stop=lambda: self._stop):
+            for piece in ai.stream_chat(self.messages, self.cfg, should_stop=lambda: self._stop,
+                                        on_route=self.routed.emit, **self.opts):
                 self.chunk.emit(piece)
         except ai.AIError as e:
             self.failed.emit(str(e))
@@ -92,7 +107,24 @@ class Bubble(QFrame):
             copy.clicked.connect(lambda: QGuiApplication.clipboard().setText(self.text))
             row.addWidget(copy)
             row.addStretch(1)
+            self.route = QLabel("")
+            self.route.setObjectName("route")
+            row.addWidget(self.route)
             lay.addLayout(row)
+
+    def set_route(self, info: dict) -> None:
+        name = ai.PROVIDERS.get(info.get("provider") or "", {}).get("title", info.get("provider") or "?")
+        parts = [name, str(info.get("model") or "")]
+        if info.get("tier") == "council":
+            parts = [f"консилиум: {info.get('voters', name)}", f"свёл {name}"]
+        elif info.get("tier"):
+            parts.append(ai.TIER_NAMES.get(info["tier"], info["tier"]))
+        if info.get("cached"):
+            parts.append("из кэша, квота не тратилась")
+        if info.get("tried"):
+            parts.append(f"резерв после сбоев: {len(info['tried'])}")
+        self.route.setText(" · ".join(p for p in parts if p))
+        self.route.setToolTip("\n".join(info.get("tried") or []))
 
     def set_text(self, text: str) -> None:
         self.text = text
@@ -133,7 +165,9 @@ class Mind(QWidget):
         self.setObjectName("root")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setWindowTitle("Mind — ИИ-ассистент")
-        self.setWindowIcon(QIcon.fromTheme("aisktagos-mind", QIcon.fromTheme("aisktagos-logo")))
+        icon_file = os.environ.get("AISKTAG_MIND_ICON", "")
+        self.setWindowIcon(QIcon(icon_file) if icon_file and Path(icon_file).exists()
+                           else QIcon.fromTheme("aisktagos-mind", QIcon.fromTheme("aisktagos-logo")))
         self.resize(900, 720)
         self.setMinimumSize(520, 460)
         self.cfg = ai.load_config()
@@ -158,16 +192,19 @@ class Mind(QWidget):
         for key, (name, _p) in ai.PERSONAS.items():
             self.persona_box.addItem(name, key)
         self.persona_box.currentIndexChanged.connect(lambda i: setattr(self, "persona", self.persona_box.itemData(i)))
+        self.mode_box = QComboBox()
+        self.mode_box.setToolTip("Кто отвечает: «Авто» сам выбирает модель и бережёт квоту")
+        self.fill_modes()
         new = QPushButton("Новый чат")
         new.setObjectName("ghost")
         new.clicked.connect(self.new_chat)
         cfg_btn = QPushButton("Настройки ИИ")
         cfg_btn.setObjectName("ghost")
-        cfg_btn.clicked.connect(lambda: subprocess.Popen(["aisktag-welcome", "--page", "ai"], start_new_session=True))
+        cfg_btn.clicked.connect(self.open_settings)
         for w in (title, self.chip):
             bl.addWidget(w)
         bl.addStretch(1)
-        for w in (self.persona_box, new, cfg_btn):
+        for w in (self.mode_box, self.persona_box, new, cfg_btn):
             bl.addWidget(w)
 
         # --- лента сообщений
@@ -235,6 +272,16 @@ class Mind(QWidget):
 
     # --- состояние
     def update_state(self) -> None:
+        if self.cfg.get("provider") == "auto":
+            have = ai.available_providers(self.cfg)
+            if have:
+                text, color = f"авто · моделей: {len(have)}", T.C["ok"]
+                self.chip.setToolTip("Доступны: " + ", ".join(ai.PROVIDERS[p]["title"] for p in have))
+            else:
+                text, color = "нет ни одного ИИ — откройте «Настройки ИИ»", T.C["danger"]
+                self.chip.setToolTip("")
+            self.chip.setText(f'<span style="color:{color}">●</span> {text}')
+            return
         if not ai.is_local(self.cfg):
             host = urlparse(self.cfg["base_url"]).netloc
             text, color = f"внешний сервер · {host}", T.C["accent"]
@@ -255,7 +302,8 @@ class Mind(QWidget):
         lay.setSpacing(10)
         head = QLabel("Чем помочь?")
         head.setObjectName("h1")
-        sub = QLabel("Mind работает на вашем компьютере: код и вопросы никуда не отправляются.")
+        sub = QLabel("Один чат — много моделей: Mind сам выбирает, кто ответит, бесплатные и локальные первыми, "
+                     "а при лимите передаёт вопрос следующей модели. Режим и роль — вверху справа.")
         sub.setObjectName("muted")
         sub.setWordWrap(True)
         lay.addSpacing(30)
@@ -351,7 +399,15 @@ class Mind(QWidget):
         self.current.set_text("…")
         self.buf = ""
         messages = [{"role": "system", "content": ai.PERSONAS[self.persona][1]}] + self.history[-HISTORY_LIMIT:]
-        self.worker = Worker(messages, self.cfg)
+        mode, tier = (self.mode_box.currentData() or ("auto", None))
+        cfg = dict(self.cfg)
+        if mode.startswith("provider:"):
+            name = mode.split(":", 1)[1]
+            mode = "auto"
+            cfg.update(provider=name, base_url=ai.PROVIDERS[name]["base_url"],
+                       model=ai.provider_model(name, "code"), api_key=ai.provider_key(name, cfg))
+        self.worker = Worker(messages, cfg, persona=self.persona, mode=mode, tier=tier)
+        self.worker.routed.connect(self.on_route)
         self.worker.chunk.connect(self.on_chunk)
         self.worker.failed.connect(self.on_failed)
         self.worker.finished.connect(self.on_done)
@@ -359,6 +415,10 @@ class Mind(QWidget):
         self.worker.start()
         self.render_timer.start()
         self.scroll_down()
+
+    def on_route(self, info: dict) -> None:
+        if self.current:
+            self.current.set_route(info)
 
     def on_chunk(self, piece: str) -> None:
         self.buf += piece
@@ -391,8 +451,86 @@ class Mind(QWidget):
         self.update_state()
         self.input.setFocus()
 
+    def fill_modes(self) -> None:
+        self.mode_box.clear()
+        if self.cfg.get("provider") not in (None, "auto"):
+            name = ai.PROVIDERS.get(self.cfg["provider"], {}).get("title", self.cfg.get("base_url", ""))
+            self.mode_box.addItem(f"Только {name}", ("auto", None))
+            return
+        for label, mode, tier in MODES:
+            self.mode_box.addItem(label, (mode, tier))
+        for p in ai.available_providers(self.cfg):
+            self.mode_box.addItem(f"Только {ai.PROVIDERS[p]['title']}", (f"provider:{p}", None))
+
+    def open_settings(self) -> None:
+        if SettingsDialog(self).exec():
+            self.cfg = ai.load_config()
+            self.fill_modes()
+            self.update_state()
+
     def scroll_down(self) -> None:
         QTimer.singleShot(0, lambda: self.scroll.verticalScrollBar().setValue(self.scroll.verticalScrollBar().maximum()))
+
+
+class SettingsDialog(QDialog):
+    """Ключи API провайдеров. Сохраняются в ai.json (доступ только владельцу), в окне не показываются."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Настройки ИИ — Mind")
+        self.setMinimumWidth(580)
+        self.cfg = ai.load_config()
+        lay = QVBoxLayout(self)
+        intro = QLabel("Добавьте ключи тех сервисов, что у вас есть. В режиме «Авто» Mind сначала зовёт бесплатные "
+                       "и локальные модели, платные — только если остальные недоступны. Ключ из переменной окружения "
+                       "важнее ключа отсюда. Сохранённые ключи здесь не показываются.")
+        intro.setWordWrap(True)
+        intro.setObjectName("muted")
+        lay.addWidget(intro)
+        form = QFormLayout()
+        self.fields: dict[str, QLineEdit] = {}
+        for name, p in ai.PROVIDERS.items():
+            if name == "local":
+                continue
+            f = QLineEdit()
+            f.setEchoMode(QLineEdit.EchoMode.Password)
+            env_has = any(os.environ.get(e) for e in p["env"])
+            saved = (self.cfg.get("keys") or {}).get(name, "")
+            f.setPlaceholderText("задан в переменной окружения" if env_has else
+                                 ("сохранён — оставьте пустым, чтобы не менять" if saved else
+                                  f"ключ API или переменная {p['env'][0]}"))
+            f.setToolTip(p["description"])
+            self.fields[name] = f
+            tag = " · бесплатно" if p["free"] else " · платно"
+            form.addRow(QLabel(f"{p['title']}{tag}"), f)
+        lay.addLayout(form)
+        self.auto = QCheckBox("Режим «Авто» (рекомендуется): модель выбирается под задачу")
+        self.auto.setChecked(self.cfg.get("provider") in (None, "auto"))
+        self.cache = QCheckBox("Отвечать из кэша на повторные вопросы (сутки) — экономит квоту")
+        self.cache.setChecked(bool(self.cfg.get("cache", True)))
+        lay.addWidget(self.auto)
+        lay.addWidget(self.cache)
+        reset = QPushButton("Снять паузу со всех моделей и очистить кэш")
+        reset.setObjectName("ghost")
+        reset.clicked.connect(lambda: (ai.reset_cooldowns(), ai.clear_cache(), reset.setText("Готово")))
+        lay.addWidget(reset)
+        box = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
+        box.accepted.connect(self.save)
+        box.rejected.connect(self.reject)
+        lay.addWidget(box)
+
+    def save(self) -> None:
+        cfg = ai._read_user_conf()
+        keys = dict(cfg.get("keys") or {})
+        for name, f in self.fields.items():
+            if f.text().strip():
+                keys[name] = f.text().strip()
+        cfg["keys"] = keys
+        if self.auto.isChecked():
+            cfg.update(provider="auto", base_url=ai.LOCAL_URL, model="aisktag-mind", api_key="")
+        cfg["cache"] = self.cache.isChecked()
+        ai.save_config(cfg)
+        self.accept()
 
 
 def single_instance(win_factory):
