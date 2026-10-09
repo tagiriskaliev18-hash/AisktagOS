@@ -290,6 +290,9 @@ def cmd_status(args: list[str]) -> None:
     else:
         print(f"{BOLD}Модель:{RESET}      {cfg['model']}")
     print(f"{BOLD}Настройки:{RESET}   {ai.USER_CONF}")
+    spare = [ai.label(c) for c in ai.chain(cfg)[1:]]
+    if spare:
+        print(f"{BOLD}Запасные:{RESET}    {' → '.join(spare)}  (если основной не ответит; jarvis --providers)")
 
 
 def cmd_model(args: list[str]) -> None:

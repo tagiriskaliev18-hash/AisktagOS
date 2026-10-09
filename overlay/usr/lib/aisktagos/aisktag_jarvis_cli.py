@@ -4,7 +4,10 @@
   jarvis задача…                выполнить одну задачу и выйти
   jarvis -y задача…             не спрашивать подтверждения команд и записи файлов
   jarvis --setup                подключить быструю нейросеть (Groq — ответ за доли секунды) или свою
-  jarvis --setup groq КЛЮЧ      то же без вопросов
+  jarvis --setup groq КЛЮЧ      то же без вопросов (также kimi, openrouter, openai)
+  jarvis --add kimi КЛЮЧ        добавить запасную нейросеть: если у основной кончатся токены, ответит она
+  jarvis --providers            порядок нейросетей: основная, запасные, встроенная (без интернета)
+  jarvis --remove kimi          убрать запасную нейросеть
   jarvis --status               какая модель и сервер используются
   jarvis --update               обновить Джарвиса из последнего релиза AIsktagOS на GitHub
 
@@ -127,6 +130,12 @@ def on_event(kind: str, text: str) -> None:
     elif kind == "info":
         print(f"{DIM}  {text}{RESET}")
         spinner.start()
+    elif kind == "switch":                   # основной сервер не ответил — отвечает запасной
+        if streaming:
+            streaming = False
+            print()
+        print(f"{YEL}  ↪ {text}{RESET}")
+        spinner.start()
     elif kind == "answer":
         print(f"\n{BOLD}Джарвис:{RESET} {text}\n")
 
@@ -136,10 +145,25 @@ def status() -> None:
     where = "локальная модель Mind" if ai.is_local(cfg) else cfg["base_url"]
     print(f"Сервер: {where}\nМодель: {cfg['model']}\nЗрение: {'да' if cfg.get('vision') else 'нет (экран читается через распознавание текста)'}")
     print(f"Настройки: {jv.CONF}")
+    providers()
     if ai.is_local(cfg):
         print(f"Состояние локального ИИ: {ai.backend_state()}")
         print("Совет: для сложных задач лучше модель standard или pro (`ai model`), а ещё лучше — сильная облачная "
               "модель (`jarvis --setup`). Модель 1.5B часто ошибается в многошаговых задачах.")
+
+
+def providers() -> None:
+    """Порядок, в котором Джарвис спрашивает нейросети."""
+    cfg = jv.load_config()
+    print(f"{BOLD}Порядок нейросетей{RESET} (если одна не может ответить — кончились токены, лимит, нет связи — "
+          f"отвечает следующая):")
+    for i, c in enumerate(ai.chain(cfg), 1):
+        role = "основная" if ai._key(c) == ai._key(cfg) else ("без интернета" if ai.is_local(c) else "запасная")
+        rest = ai.cooling(c)
+        note = f"{YEL}  отдыхает ещё {rest // 60 + 1} мин после отказа{RESET}" if rest else ""
+        print(f"  {i}. {ai.label(c)} — {role}{note}")
+    if len(ai.chain(cfg)) < 3:
+        print(f"{DIM}Добавить запасную: jarvis --add kimi КЛЮЧ (или groq, openrouter, openai){RESET}")
 
 
 # Быстрые облачные серверы с вызовом инструментов. Модели берутся из списка сервера (/models): первая
@@ -154,7 +178,12 @@ PROVIDERS = {
                    ["openai/gpt-4.1-mini", "google/gemini-2.5-flash", "anthropic/claude-sonnet-4", "openai/gpt-4o-mini"]),
     "openai": ("OpenAI", "https://api.openai.com/v1", "https://platform.openai.com/api-keys",
                ["gpt-4.1-mini", "gpt-4o-mini", "gpt-4.1", "gpt-4o"]),
+    "kimi": ("Kimi (через tokenwave.ru) — сильная модель Moonshot", "https://tokenwave.ru/v1",
+             "https://tokenwave.ru", ["kimi-k3"]),
 }
+# В каком формате говорить с сервером: tokenwave.ru заявлен как Anthropic-совместимый; при подключении
+# пробуем оба формата и запоминаем тот, на который сервер ответил
+API_ORDER = {"kimi": ["anthropic", "openai"]}
 
 
 def _api(url: str, key: str, body: dict | None = None, timeout: float = 30) -> dict:
@@ -165,41 +194,84 @@ def _api(url: str, key: str, body: dict | None = None, timeout: float = 30) -> d
         return json.loads(r.read())
 
 
-def connect(provider: str, key: str, model: str = "") -> bool:
-    """Проверить ключ, выбрать модель и сохранить в jarvis.json. True — всё работает."""
+def _probe(base: str, key: str, model: str, api: str) -> None:
+    """Короткий пробный вопрос модели; ошибки — как у urllib."""
+    body = {"model": model, "max_tokens": 8, "messages": [{"role": "user", "content": "Ответь одним словом: ок"}]}
+    if api == "anthropic":
+        ai.anthropic_message({"base_url": base, "api_key": key, "model": model, "api": "anthropic"}, body, timeout=60)
+    else:
+        _api(base + "/chat/completions", key, body, timeout=60)
+
+
+def connect(provider: str, key: str, model: str = "", backup: bool = False) -> bool:
+    """Проверить ключ, выбрать модель и сохранить. backup=False — сделать основной (jarvis.json),
+    True — только запасной. В обоих случаях поставщик попадает в список запасных providers.json,
+    поэтому прежняя основная нейросеть остаётся запасной. True — всё работает."""
     title, base, _, preferred = PROVIDERS[provider]
     name = title.split(" —")[0]
+    ids = []
     try:
         ids = [m["id"] for m in _api(base + "/models", key).get("data", [])]
     except urllib.error.HTTPError as e:
-        print(f"{RED}{name}: ключ не подошёл (ошибка {e.code}). Проверьте, что скопировали его целиком.{RESET}")
+        if e.code in (401, 403) and provider not in API_ORDER:
+            print(f"{RED}{name}: ключ не подошёл (ошибка {e.code}). Проверьте, что скопировали его целиком.{RESET}")
+            return False
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        pass                                   # список моделей есть не у всех серверов — возьмём известную
+    model = model or next((m for m in preferred if m in ids), ids[0] if ids else preferred[0])
+    t0, api, codes = time.time(), "", []
+    for fmt in API_ORDER.get(provider, ["openai"]):
+        try:
+            _probe(base, key, model, fmt)
+            api = fmt
+            break
+        except urllib.error.HTTPError as e:
+            codes.append(e.code)
+        except (OSError, ValueError, KeyError) as e:
+            codes.append(0)
+            print(f"{DIM}  {fmt}: {e}{RESET}")
+    if not api:
+        if any(c in (401, 403) for c in codes):
+            print(f"{RED}{name}: ключ не подошёл. Проверьте, что скопировали его целиком.{RESET}")
+        elif 402 in codes:
+            print(f"{RED}{name}: на счёте нет средств или токенов.{RESET}")
+        elif 429 in codes:
+            print(f"{RED}{name}: исчерпан лимит запросов — попробуйте позже.{RESET}")
+        elif codes and all(c == 0 for c in codes):
+            print(f"{RED}Нет связи с {base}.{RESET}")
+        else:
+            print(f"{RED}Модель {model} не ответила (ошибки: {', '.join(map(str, codes))}). "
+                  f"Другую модель можно указать третьим словом: jarvis --setup {provider} КЛЮЧ МОДЕЛЬ{RESET}")
         return False
-    except (OSError, ValueError) as e:
-        print(f"{RED}Нет связи с {base}: {e}{RESET}")
-        return False
-    model = model or next((m for m in preferred if m in ids), ids[0] if ids else "")
-    if not model:
-        print(f"{RED}Сервер не вернул ни одной модели.{RESET}")
-        return False
-    t0 = time.time()
-    try:
-        _api(base + "/chat/completions", key, {"model": model, "max_tokens": 8,
-                                                "messages": [{"role": "user", "content": "Ответь одним словом: ок"}]})
-    except (OSError, ValueError) as e:
-        print(f"{RED}Модель {model} не ответила: {e}{RESET}")
-        return False
+    ai.add_provider({"id": provider, "name": name, "base_url": base, "model": model, "api_key": key, "api": api},
+                    first=not backup)
+    if backup:
+        print(f"{BOLD}Готово:{RESET} {name} ({model}) — запасная нейросеть: ответит, если у основной кончатся "
+              f"токены или пропадёт связь (ответ за {time.time() - t0:.1f} с). Ключ — в {ai.PROVIDERS_CONF} "
+              f"(доступен только вам).")
+        return True
     cfg = {}
     try:
         cfg = json.loads(jv.CONF.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         pass
-    cfg.update(base_url=base, model=model, api_key=key, vision=False)
+    cfg.update(base_url=base, model=model, api_key=key, api=api, name=name, vision=False)
     jv.CONF.parent.mkdir(parents=True, exist_ok=True)
     jv.CONF.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     jv.CONF.chmod(0o600)
     print(f"{BOLD}Готово:{RESET} Джарвис работает через {name}, модель {model} "
           f"(ответ за {time.time() - t0:.1f} с). Ключ сохранён в {jv.CONF} (доступен только вам).")
     return True
+
+
+def remove(name: str) -> None:
+    items = ai.load_providers()
+    left = [p for p in items if p.get("id") != name]
+    if len(left) == len(items):
+        print(f"Запасной нейросети «{name}» нет. Список: jarvis --providers")
+        return
+    ai.save_providers(left)
+    print(f"Убрал «{name}» из запасных.")
 
 
 def setup(args: list[str] | None = None) -> None:
@@ -212,7 +284,7 @@ def setup(args: list[str] | None = None) -> None:
             cfg = json.loads(jv.CONF.read_text(encoding="utf-8"))
         except (OSError, ValueError):
             pass
-        for k in ("base_url", "model", "api_key"):
+        for k in ("base_url", "model", "api_key", "api", "name"):
             cfg.pop(k, None)
         jv.CONF.parent.mkdir(parents=True, exist_ok=True)
         jv.CONF.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -241,6 +313,7 @@ def setup(args: list[str] | None = None) -> None:
         cfg["model"] = input("Модель: ").strip()
         cfg["api_key"] = input("Ключ API (если нужен): ").strip()
         cfg["vision"] = input("Модель понимает картинки? [д/Н]: ").strip().lower() in ("д", "да", "y")
+        cfg["api"] = "anthropic" if input("Формат API: 1 — OpenAI, 2 — Anthropic [1]: ").strip() == "2" else "openai"
         jv.CONF.parent.mkdir(parents=True, exist_ok=True)
         jv.CONF.write_text(json.dumps(cfg, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         jv.CONF.chmod(0o600)
@@ -394,6 +467,17 @@ def main() -> None:
         return status()
     if args and args[0] == "--setup":
         return setup(args[1:])
+    if args and args[0] == "--add":
+        if len(args) < 2 or args[1] not in PROVIDERS:
+            print(f"Какую добавить: jarvis --add {'|'.join(PROVIDERS)} КЛЮЧ [МОДЕЛЬ]")
+            return
+        key = args[2] if len(args) > 2 else input("Ключ API: ").strip()
+        connect(args[1], key, args[3] if len(args) > 3 else "", backup=True)
+        return
+    if args and args[0] == "--providers":
+        return providers()
+    if args and args[0] == "--remove" and len(args) > 1:
+        return remove(args[1])
     if args and args[0] == "--update":
         update()
         return
@@ -421,8 +505,7 @@ def main() -> None:
                       f"ей не по силам. Для мгновенных ответов и действий подключите Groq (бесплатно, ~1 минута).{RESET}")
                 if input("Подключить сейчас? [Д/н]: ").strip().lower() not in ("н", "n", "нет", "no"):
                     setup()
-                    agent.cfg = jv.load_config()
-                    agent._ctx_checked = False
+                    agent.use_config(jv.load_config())
                 print()
             elif ai.list_models().get("active") == "lite":
                 print(f"{DIM}Совет: мгновенные ответы и сложные задачи — `jarvis --setup` (Groq, бесплатно). "
@@ -445,8 +528,7 @@ def main() -> None:
                 continue
             if task == "/setup":
                 setup()
-                agent.cfg = jv.load_config()
-                agent._ctx_checked = False
+                agent.use_config(jv.load_config())
                 continue
             if task == "/yes":
                 set_yes(not auto_yes)
