@@ -1,0 +1,36 @@
+[Unit]
+Description=AIsktag Mind: сервер языковой модели (llama.cpp)
+Documentation=https://github.com/tagiriskaliev18-hash/AisktagOS
+ConditionPathExists=/opt/aisktagos/ai/llama
+# Запускается по первому запросу и останавливается, когда прокси aisktag-llm.service больше не нужен
+StopWhenUnneeded=yes
+
+[Service]
+Type=simple
+DynamicUser=yes
+# Доступ к видеокарте для Vulkan
+SupplementaryGroups=render video
+EnvironmentFile=-/etc/aisktagos/ai.conf
+ExecStart=/usr/lib/aisktagos/ai/aisktag-llm-run
+ExecStartPost=/usr/lib/aisktagos/ai/aisktag-llm-wait
+TimeoutStartSec=300
+CacheDirectory=aisktagos-llm
+Environment=XDG_CACHE_HOME=/var/cache/aisktagos-llm
+# Фоновая нагрузка: не мешает интерфейсу и первой уходит при нехватке памяти
+Nice=5
+CPUWeight=60
+OOMScoreAdjust=500
+MemoryHigh=80%
+# Защита: модель видит только свой кэш и loopback
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+IPAddressDeny=any
+IPAddressAllow=localhost

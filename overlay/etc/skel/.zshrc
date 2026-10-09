@@ -39,6 +39,7 @@ alias gs='git status -sb'
 alias gl='git log --oneline --graph --decorate -20'
 alias lg='lazygit'
 alias dc='docker compose'
+mkcd() { mkdir -p "$1" && cd "$1"; }
 alias update='sudo apt update && sudo apt full-upgrade && flatpak update -y'
 
 # Плагины и интеграции
@@ -46,6 +47,8 @@ alias update='sudo apt update && sudo apt full-upgrade && flatpak update -y'
 [ -f /usr/share/doc/fzf/examples/key-bindings.zsh ] && source /usr/share/doc/fzf/examples/key-bindings.zsh
 command -v zoxide   >/dev/null && eval "$(zoxide init zsh)"
 command -v direnv   >/dev/null && eval "$(direnv hook zsh)"
+# Встроенный ИИ Mind: Ctrl+G — описание → команда, `ai why` — разбор ошибки
+[ -f /usr/share/aisktagos/zsh/aisktag-ai.zsh ] && source /usr/share/aisktagos/zsh/aisktag-ai.zsh
 command -v starship >/dev/null && eval "$(starship init zsh)"
 # Подсветка синтаксиса должна подключаться последней
 [ -f /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh ] && source /usr/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh

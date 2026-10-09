@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=Джарвис
+Name[en]=Jarvis
+GenericName=ИИ-агент
+GenericName[en]=AI agent
+Comment=Сам выполняет задачи: файлы, команды, приложения, экран и браузер
+Comment[en]=Does tasks for you: files, commands, apps, screen and browser
+Exec=kitty --class aisktag-jarvis --title Джарвис jarvis
+Icon=aisktagos-jarvis
+Terminal=false
+Categories=Utility;Development;
+Keywords=jarvis;джарвис;агент;agent;ai;ии;автоматизация;браузер;
+StartupWMClass=aisktag-jarvis
+# Глобальная клавиша по умолчанию (kglobalaccel читает её и из kglobalshortcutsrc)
+X-KDE-Shortcuts=Meta+J

@@ -1,0 +1,31 @@
+#!/usr/bin/env python3
+"""jarvis — запуск ИИ-агента Джарвиса (справка: jarvis --help).
+
+Код агента берётся из обновления пользователя (~/.local/share/aisktagos/jarvis/lib, ставит
+`jarvis --update`), если там версия новее встроенной в систему, иначе из /usr/lib/aisktagos.
+"""
+import os
+import re
+import sys
+
+SYS_LIB = "/usr/lib/aisktagos"
+USER_LIB = os.path.join(os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share")),
+                        "aisktagos", "jarvis", "lib")
+
+
+def version(lib: str) -> tuple:
+    try:
+        with open(os.path.join(lib, "aisktag_jarvis.py"), encoding="utf-8") as f:
+            m = re.search(r'^VERSION = "([\d.]+)"', f.read(), re.M)
+        return tuple(int(x) for x in m.group(1).split("."))
+    except (OSError, AttributeError, ValueError):
+        return ()
+
+
+sys.path.insert(0, SYS_LIB)                       # aisktag_ai и остальные библиотеки системы
+if os.path.isfile(os.path.join(USER_LIB, "aisktag_jarvis_cli.py")) and version(USER_LIB) > version(SYS_LIB):
+    sys.path.insert(0, USER_LIB)                  # обновление новее встроенной версии
+
+import aisktag_jarvis_cli  # noqa: E402
+
+aisktag_jarvis_cli.main()

@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=AIsktagOS: ярлыки рабочего стола
+Exec=/usr/lib/aisktagos/desktop-shortcuts.sh
+NoDisplay=true
+X-KDE-autostart-phase=1
+OnlyShowIn=KDE;

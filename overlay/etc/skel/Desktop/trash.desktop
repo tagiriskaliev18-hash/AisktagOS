@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Link
+Name=Корзина
+Name[en]=Trash
+Icon=user-trash
+URL=trash:/

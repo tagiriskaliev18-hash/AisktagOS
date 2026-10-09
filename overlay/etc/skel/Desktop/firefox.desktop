@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Firefox
+GenericName=Веб-браузер
+Exec=firefox %u
+Icon=firefox
+Terminal=false
+Categories=Network;WebBrowser;

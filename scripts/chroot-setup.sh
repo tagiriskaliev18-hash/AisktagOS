@@ -121,7 +121,77 @@ find /usr/share/doc -type d -empty -delete
 
 # --- Файлы AIsktagOS --------------------------------------------------------------
 cp -a "$B/overlay/." /
-chmod +x /usr/bin/aisktag-* /usr/lib/aisktagos/*.sh /usr/lib/aisktagos/*.py /etc/xdg/plasma-workspace/env/*.sh 2>/dev/null || true
+chmod +x /usr/bin/aisktag-* /usr/bin/ai /usr/bin/jarvis /usr/lib/aisktagos/*.sh /usr/lib/aisktagos/*.py \
+         /usr/lib/aisktagos/ai/* /etc/xdg/plasma-workspace/env/*.sh 2>/dev/null || true
+# Версия в установщике — из config.env (иначе в 1.1 мастер писал «AIsktagOS 1.0»)
+sed -i -e "s/^\(    version: *\).*/\1${OS_VERSION} ${OS_CODENAME}/" \
+       -e "s/^\(    shortVersion: *\).*/\1\"${OS_VERSION}\"/" \
+       -e "s/^\(    versionedName: *\).*/\1${OS_NAME} ${OS_VERSION}/" \
+       -e "s/^\(    shortVersionedName: *\).*/\1${OS_NAME} ${OS_VERSION}/" \
+       /etc/calamares/branding/aisktagos/branding.desc
+
+# --- lazygit (нет в репозитории Ubuntu 24.04) --------------------------------------
+install_lazygit() {
+    local tgz="/tmp/lazygit.tar.gz"
+    curl -fL --retry 4 --retry-delay 5 -o "$tgz"         "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_linux_x86_64.tar.gz" || return 1
+    echo "$LAZYGIT_SHA256  $tgz" | sha256sum -c - || return 1
+    tar -xzf "$tgz" -C /usr/local/bin lazygit || return 1
+    chmod 755 /usr/local/bin/lazygit
+    rm -f "$tgz"
+}
+install_lazygit || echo "ВНИМАНИЕ: lazygit не установлен (нет сети?) — псевдоним lg работать не будет"
+
+# --- ИИ Mind: движок llama.cpp и встроенная модель ---------------------------------
+# Внутри `if install_ai` режим set -e не действует, поэтому каждый критичный шаг явно завершается `|| return 1`.
+# Сбой загрузки не должен ломать всю сборку: тогда образ получится без ИИ-движка/модели,
+# а доустановить их можно из Центра AIsktagOS («ИИ») или командой `ai model install`.
+install_ai() {
+    local root=/opt/aisktagos/ai/llama tmp=/tmp/aisktagos-ai variant asset sha srv
+    local base="https://github.com/ggml-org/llama.cpp/releases/download/${LLAMACPP_BUILD}"
+    mkdir -p "$tmp" "$root"
+    for variant in cpu vulkan; do
+        if [ "$variant" = cpu ]; then
+            asset="llama-${LLAMACPP_BUILD}-bin-ubuntu-x64.tar.gz"; sha="$LLAMACPP_CPU_SHA256"
+        else
+            asset="llama-${LLAMACPP_BUILD}-bin-ubuntu-vulkan-x64.tar.gz"; sha="$LLAMACPP_VULKAN_SHA256"
+        fi
+        curl -fL --retry 4 --retry-delay 5 -o "$tmp/$asset" "$base/$asset" || return 1
+        echo "$sha  $tmp/$asset" | sha256sum -c - || return 1
+        mkdir -p "$tmp/x-$variant" "$root/$variant"
+        tar -xzf "$tmp/$asset" -C "$tmp/x-$variant" || return 1
+        srv="$(find "$tmp/x-$variant" -name llama-server -type f | head -1)"
+        [ -n "$srv" ] || { echo "llama-server не найден в $asset"; return 1; }
+        cp -a "$(dirname "$srv")/." "$root/$variant/" || return 1
+        chmod -R a+rX "$root/$variant"
+        chmod 755 "$root/$variant/llama-server" || return 1
+        # Диагностика для журнала сборки: все ли системные библиотеки на месте
+        LD_LIBRARY_PATH="$root/$variant" ldd "$root/$variant/llama-server" | grep 'not found' || echo "llama-server ($variant): зависимости найдены"
+    done
+
+    local model="${AI_BUNDLE_MODEL:-lite}"
+    if [ "$model" != none ]; then
+        local catalog=/usr/share/aisktagos/ai/models.json file url msha
+        file="$(jq -r --arg id "$model" '.models[] | select(.id == $id) | .file' "$catalog")"
+        url="$(jq -r --arg id "$model" '.models[] | select(.id == $id) | .url' "$catalog")"
+        msha="$(jq -r --arg id "$model" '.models[] | select(.id == $id) | .sha256' "$catalog")"
+        [ -n "$file" ] && [ "$file" != null ] || { echo "модель «$model» не найдена в каталоге"; return 1; }
+        mkdir -p /usr/share/aisktagos/ai/models
+        curl -fL --retry 5 --retry-delay 10 -C - -o "/usr/share/aisktagos/ai/models/$file" "$url" || return 1
+        echo "$msha  /usr/share/aisktagos/ai/models/$file" | sha256sum -c - || return 1
+        chmod 644 "/usr/share/aisktagos/ai/models/$file"
+        sed -i "s/^AI_MODEL=.*/AI_MODEL=$model/" /etc/aisktagos/ai.conf
+        echo "Встроенная модель Mind: $model ($file)"
+    fi
+}
+if install_ai; then
+    echo "ИИ Mind установлен"
+else
+    echo "ВНИМАНИЕ: ИИ Mind установлен не полностью (см. выше) — образ будет без встроенной модели"
+fi
+rm -rf /tmp/aisktagos-ai
+
+# Значки на рабочем столе нового пользователя (как в Windows): файлы должны быть исполняемыми, иначе Plasma спросит доверие
+chmod +x /etc/skel/Desktop/*.desktop 2>/dev/null || true
 
 # Тёмная тема по умолчанию: цвета Breeze Dark + настройки AIsktagOS
 { cat /usr/share/color-schemes/BreezeDark.colors; echo; cat /usr/share/aisktagos/kdeglobals.aisktagos; } > /etc/xdg/kdeglobals
@@ -183,10 +253,14 @@ sed -i 's|^#\?SHELL=.*|SHELL=/usr/bin/zsh|' /etc/default/useradd
 
 # --- Службы -------------------------------------------------------------------
 systemctl enable NetworkManager sddm aisktagos-flathub.service
+# ИИ Mind: сокет слушает 127.0.0.1:6573, модель загружается только по первому запросу
+systemctl enable aisktag-llm.socket
 systemctl set-default graphical.target
-# Сетью управляет NetworkManager; ожидание systemd-networkd (если его притянул netplan)
-# только задерживает загрузку до 2 минут «A start job is running for Wait for Network…»
+# Сетью управляет NetworkManager. Ожидание сети перед рабочим столом на ноутбуке
+# без Wi-Fi и в виртуальной машине добавляет десятки секунд и больше.
 systemctl mask systemd-networkd-wait-online.service || true
+systemctl disable NetworkManager-wait-online.service || true
+systemctl mask NetworkManager-wait-online.service || true
 # Docker запускается по первому обращению — не тормозит загрузку
 systemctl disable docker.service || true
 systemctl enable docker.socket || true

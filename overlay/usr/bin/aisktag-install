@@ -1,22 +1,117 @@
 #!/usr/bin/env bash
-# Запуск установщика AIsktagOS (Calamares) с правами администратора.
-# В live-сессии sudo работает без пароля. sudo-rs в Ubuntu 26.04 не поддерживает «sudo -E»,
-# поэтому переменные, нужные для доступа к экрану (Wayland или X11), передаются явно.
-if pgrep -x calamares >/dev/null; then
+# Запуск установщика AIsktagOS (Calamares) из графической live-сессии.
+#
+# sudo и sudo-rs (Ubuntu 26.04+) сбрасывают окружение, «sudo -E» ненадёжен,
+# поэтому переменные экрана передаются явно. Права на сокет Wayland и файл
+# Xauthority не ослабляются: root и так читает их (CAP_DAC_OVERRIDE), а
+# libwayland требует каталог XDG_RUNTIME_DIR, принадлежащий root.
+set -euo pipefail
+
+if [ "$(id -u)" -eq 0 ]; then
+    echo "Запустите установщик от пользователя live-сессии, не от root." >&2
+    exit 1
+fi
+
+if command -v pgrep >/dev/null 2>&1 && pgrep -x calamares >/dev/null 2>&1; then
     exit 0
 fi
-if [ -n $WAYLAND_DISPLAY ] && [ -n $XDG_RUNTIME_DIR ]; then sudo chmod 0777 $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY 2>/dev/null || true; xhost +SI:localuser:root 2>/dev/null || true; fi$WAYLAND_DISPLAY ] && [ -n $XDG_RUNTIME_DIR ]; then sudo chmod 0777 $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY || true; fi
-exec sudo env \
-    WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
-    DISPLAY="${DISPLAY:-}" \
-    XAUTHORITY="${XAUTHORITY:-}" \
-    XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-}" \
-    XDG_SESSION_TYPE="${XDG_SESSION_TYPE:-}" \
-    XDG_CURRENT_DESKTOP="${XDG_CURRENT_DESKTOP:-KDE}" \
-    KDE_FULL_SESSION=true \
-    ${QT_QUICK_BACKEND:+QT_QUICK_BACKEND="$QT_QUICK_BACKEND"} \
-    QT_QPA_PLATFORMTHEME=kde \
-    LANG="${LANG:-C.UTF-8}" \
-    LANGUAGE="${LANGUAGE:-}" \
-    HOME=/root XDG_CONFIG_HOME=/root/.config XDG_CACHE_HOME=/root/.cache \
-    calamares "$@"
+
+runtime_dir=""
+wl_name=""
+
+cleanup() {
+    if [ -n "${runtime_dir}" ]; then
+        sudo rm -rf "${runtime_dir}" || true
+    fi
+}
+trap cleanup EXIT
+
+make_runtime() {
+    if [ -z "${runtime_dir}" ]; then
+        runtime_dir="$(sudo mktemp -d /tmp/aisktagos-calamares-runtime.XXXXXX)"
+        sudo chmod 0700 "${runtime_dir}"
+    fi
+}
+
+env_set=()
+add() { env_set+=("$1"); }
+
+# Wayland: свой каталог runtime и ссылка на сокет композитора.
+# Режим сокета пользователя не меняется.
+if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+    if [ "${WAYLAND_DISPLAY#/}" != "${WAYLAND_DISPLAY}" ]; then
+        wl_sock="${WAYLAND_DISPLAY}"
+        wl_base="$(basename "${WAYLAND_DISPLAY}")"
+    else
+        wl_sock="${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}"
+        wl_base="${WAYLAND_DISPLAY}"
+    fi
+    if [ -S "${wl_sock}" ]; then
+        make_runtime
+        wl_name="${wl_base}"
+        sudo ln -s "${wl_sock}" "${runtime_dir}/${wl_name}"
+        add "WAYLAND_DISPLAY=${wl_name}"
+        add "XDG_RUNTIME_DIR=${runtime_dir}"
+        add "XDG_SESSION_TYPE=wayland"
+    fi
+fi
+
+# X11 и XWayland: копия magic cookie в каталог root, без xhost и без 0777.
+if [ -n "${DISPLAY:-}" ]; then
+    add "DISPLAY=${DISPLAY}"
+    auth_src="${XAUTHORITY:-${HOME}/.Xauthority}"
+    if [ -r "${auth_src}" ]; then
+        make_runtime
+        sudo cp "${auth_src}" "${runtime_dir}/Xauthority"
+        sudo chown root:root "${runtime_dir}/Xauthority"
+        sudo chmod 0600 "${runtime_dir}/Xauthority"
+        add "XAUTHORITY=${runtime_dir}/Xauthority"
+    fi
+fi
+
+platform=""
+if [ -n "${wl_name}" ] && [ -n "${DISPLAY:-}" ]; then
+    # Сначала родной Wayland; если композитор не примет root — XWayland.
+    platform="wayland;xcb"
+elif [ -n "${wl_name}" ]; then
+    platform="wayland"
+elif [ -n "${DISPLAY:-}" ]; then
+    add "XDG_SESSION_TYPE=x11"
+    platform="xcb"
+else
+    echo "Нет сессии Wayland или X11. Откройте установщик с рабочего стола." >&2
+    exit 1
+fi
+add "QT_QPA_PLATFORM=${platform}"
+
+add "XDG_CURRENT_DESKTOP=${XDG_CURRENT_DESKTOP:-KDE}"
+add "KDE_FULL_SESSION=true"
+add "QT_QPA_PLATFORMTHEME=kde"
+add "LANG=${LANG:-C.UTF-8}"
+add "LANGUAGE=${LANGUAGE:-}"
+add "HOME=/root"
+add "XDG_CONFIG_HOME=/root/.config"
+add "XDG_CACHE_HOME=/root/.cache"
+
+if [ -n "${QT_QUICK_BACKEND:-}" ]; then
+    add "QT_QUICK_BACKEND=${QT_QUICK_BACKEND}"
+fi
+if [ -n "${KWIN_COMPOSE:-}" ]; then
+    add "KWIN_COMPOSE=${KWIN_COMPOSE}"
+fi
+
+if [ "${AISKTAG_INSTALL_DRY_RUN:-}" = "1" ]; then
+    printf '%s\n' "${env_set[@]}"
+    if [ -n "${runtime_dir}" ]; then
+        echo "RUNTIME_MODE=$(stat -c %a "${runtime_dir}")"
+        if [ -n "${wl_name}" ] && [ -L "${runtime_dir}/${wl_name}" ]; then
+            echo "WAYLAND_LINK=$(readlink "${runtime_dir}/${wl_name}")"
+        fi
+        if [ -f "${runtime_dir}/Xauthority" ]; then
+            echo "XAUTH_MODE=$(stat -c %a "${runtime_dir}/Xauthority")"
+        fi
+    fi
+    exit 0
+fi
+
+sudo env "${env_set[@]}" calamares "$@"

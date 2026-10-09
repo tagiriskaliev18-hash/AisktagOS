@@ -162,7 +162,12 @@ build_grub_fonts() {
         size="${spec##*:}"
         src="$regular"
         [ "$name" = Bold ] && src="$bold"
-        grub-mkfont -s "$size" -n "Inter $name $size" -o "$dir/inter-${name,,}-$size.pf2" "$src"
+        # GRUB сам дописывает к семейству стиль и размер («Inter Bold 44»), поэтому -n — только семейство,
+        # а жирность задаёт -b. С «-n "Inter Regular 20"» имя получалось «Inter Regular 20 Regular 20»,
+        # тема не находила шрифт и GRUB рисовал меню огромным Inter Bold 44.
+        local bold_flag=()
+        [ "$name" = Bold ] && bold_flag=(-b)
+        grub-mkfont -s "$size" "${bold_flag[@]}" -n "Inter" -o "$dir/inter-${name,,}-$size.pf2" "$src"
     done
 }
 
@@ -178,6 +183,8 @@ build_grub() {
 
     mkdir -p "$g/themes/aisktagos"
     cp "$ROOT_DIR"/iso/theme/* "$g/themes/aisktagos/"
+    sed -i -e "s/@OS_NAME@/$OS_NAME/g" -e "s/@OS_VERSION@/$OS_VERSION/g" \
+        -e "s/@OS_CODENAME@/$OS_CODENAME/g" "$g/themes/aisktagos/theme.txt"
     build_grub_fonts "$g/themes/aisktagos"
     mkdir -p "$g/fonts"
     cp "$CHROOT/usr/share/grub/unicode.pf2" "$g/fonts/unicode.pf2"

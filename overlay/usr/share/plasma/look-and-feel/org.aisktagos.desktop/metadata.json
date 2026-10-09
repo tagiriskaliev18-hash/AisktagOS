@@ -3,12 +3,12 @@
     "KPlugin": {
         "Authors": [ { "Name": "AIsktagOS" } ],
         "Category": "",
-        "Description": "Строка меню сверху и док снизу — привычно для macOS, удобно для разработчика",
-        "Description[en]": "Menu bar on top and a dock at the bottom",
+        "Description": "Панель задач с меню «Пуск» (как в Windows), виртуальные столы и плитки (как в Linux), ИИ-ассистент под рукой",
+        "Description[en]": "Windows-style taskbar with Linux virtual desktops and tiling, built-in AI assistant",
         "Id": "org.aisktagos.desktop",
         "License": "GPLv2+",
         "Name": "AIsktagOS",
-        "Version": "1.0"
+        "Version": "2.0"
     },
     "X-Plasma-APIVersion": "2"
 }

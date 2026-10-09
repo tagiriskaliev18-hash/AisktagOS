@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Центр AIsktagOS
+Name[en]=AIsktagOS Center
+Icon=aisktagos-logo
+Exec=aisktag-welcome
+Terminal=false

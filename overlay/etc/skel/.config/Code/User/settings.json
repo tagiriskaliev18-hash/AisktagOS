@@ -5,9 +5,22 @@
     "editor.minimap.enabled": false,
     "editor.renderWhitespace": "boundary",
     "editor.formatOnSave": true,
+    "editor.bracketPairColorization.enabled": true,
+    "editor.guides.bracketPairs": "active",
+    "editor.inlineSuggest.enabled": true,
+    "files.autoSave": "onFocusChange",
+    "files.trimTrailingWhitespace": true,
+    "files.insertFinalNewline": true,
+    "git.autofetch": true,
+    "git.confirmSync": false,
+    "git.enableSmartCommit": true,
+    "explorer.confirmDelete": false,
     "terminal.integrated.fontFamily": "'JetBrains Mono'",
     "terminal.integrated.defaultProfile.linux": "zsh",
     "window.titleBarStyle": "custom",
     "workbench.colorTheme": "Default Dark Modern",
-    "telemetry.telemetryLevel": "off"
+    "workbench.startupEditor": "none",
+    "update.mode": "none",
+    "telemetry.telemetryLevel": "off",
+    "continue.telemetryEnabled": false
 }

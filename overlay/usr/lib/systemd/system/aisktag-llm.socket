@@ -1,0 +1,10 @@
+[Unit]
+Description=AIsktag Mind: локальный ИИ (порт 6573, модель загружается по первому запросу)
+Documentation=https://github.com/tagiriskaliev18-hash/AisktagOS
+
+[Socket]
+# Только локальный компьютер: наружу модель не торчит
+ListenStream=127.0.0.1:6573
+
+[Install]
+WantedBy=sockets.target

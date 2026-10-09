@@ -20,6 +20,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Быстрая статическая проверка (1–2 минуты) идёт параллельно со сборкой и не блокирует её
+  lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Скрипты оболочки (shellcheck)
+        run: |
+          shellcheck -S warning build.sh scripts/*.sh overlay/usr/lib/aisktagos/*.sh             overlay/usr/lib/aisktagos/ai/aisktag-llm-run overlay/usr/lib/aisktagos/ai/aisktag-llm-wait             overlay/usr/bin/aisktag-install tools/jarvis-update.sh tools/release/make-jarvis-update.sh
+      - name: Python и дизайн-токены
+        run: |
+          python3 -m py_compile overlay/usr/lib/aisktagos/*.py overlay/usr/lib/aisktagos/ai/aisktag-ai-model             overlay/usr/bin/ai overlay/usr/bin/aisktag-new overlay/usr/bin/aisktag-doctor overlay/usr/bin/jarvis
+          python3 tools/test-jarvis.py
+          python3 tools/test-fallback.py
+          python3 assets/tokens.py --check
+      - name: Каталог моделей, раскладка Plasma, правила polkit
+        run: |
+          python3 -c "import json; d = json.load(open('overlay/usr/share/aisktagos/ai/models.json')); assert d['models']"
+          node --check overlay/usr/share/plasma/look-and-feel/org.aisktagos.desktop/contents/layouts/org.kde.plasma.desktop-layout.js
+          python3 -c "import xml.dom.minidom as m; m.parse('overlay/usr/share/polkit-1/actions/org.aisktagos.ai.policy')"
+
   iso:
     runs-on: ubuntu-24.04
     timeout-minutes: 240
@@ -54,11 +74,14 @@ jobs:
             split -b 1900M -d -a 1 "$iso" "$iso.part"
             rm "$iso"
             parts="$(ls "$iso".part* | tr '\n' ' ')"
-            plus="$(ls "$iso".part* | sed 's/$/ +/' | tr '\n' ' ' | sed 's/ + $//')"
-            printf '@echo off\r\necho Склеиваю %s ...\r\ncopy /b %s %s\r\necho Готово.\r\npause\r\n' "$iso" "$plus" "$iso" > "join-windows.bat"
+            # Скрипт для Windows: проверяет, что скачаны все части, склеивает и сверяет SHA-256
+            sed -e "s/@ISO@/$iso/" -e "s/@PARTS@/$(ls "$iso".part* | wc -l)/" -e 's/\r$//' -e 's/$/\r/' \
+                "$GITHUB_WORKSPACE/tools/release/join-windows.bat" > join-windows.bat
             printf '#!/bin/sh\ncat %s> %s && sha256sum -c %s.sha256\n' "$parts" "$iso" "$iso" > join-linux.sh
             chmod +x join-linux.sh
           fi
+          # Обновление Джарвиса без переустановки ОС (jarvis --update, tools/jarvis-update.sh)
+          "$GITHUB_WORKSPACE/tools/release/make-jarvis-update.sh" .
           ls -la
 
       - name: Артефакт сборки (для PR и проверки)
@@ -70,13 +93,23 @@ jobs:
           retention-days: 3
           compression-level: 0
 
+      - name: Параметры релиза
+        id: rel
+        if: github.event_name != 'pull_request'
+        run: |
+          . ./config.env
+          echo "tag=${OS_ID}-${OS_VERSION}-build${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "name=${OS_NAME} ${OS_VERSION} «${OS_CODENAME}» — сборка ${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+
       - name: Публикация в GitHub Releases
         if: github.event_name != 'pull_request'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: aisktagos-1.0-build${{ github.run_number }}
-          name: AIsktagOS 1.0 «Genesis» — сборка ${{ github.run_number }}
+          tag_name: ${{ steps.rel.outputs.tag }}
+          name: ${{ steps.rel.outputs.name }}
           body_path: RELEASE_NOTES.md
           target_commitish: ${{ github.sha }}
           files: out/*
-          make_latest: true
+          # Сборки из веток разработки — предварительные: они не подменяют «последний» релиз main
+          prerelease: ${{ github.ref != 'refs/heads/main' }}
+          make_latest: ${{ github.ref == 'refs/heads/main' }}
