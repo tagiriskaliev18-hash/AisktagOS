@@ -45,10 +45,18 @@ overlay/                    файлы поверх Ubuntu; копируются
   usr/lib/aisktagos/        aisktag-center.py (PyQt6: приветствие, драйверы, dev-инструменты), post-install.sh,
                             display-fallback.sh (SDDM→X11 без DRM), live-session.sh, pre-apt-snapshot.sh
   usr/bin/aisktag-*         запуск центра и установщика
+  usr/lib/python3/dist-packages/mindkit/  копия MindKit из репозитория MindTagSystem (не править здесь:
+                            правится там, сюда переносится tools/sync-mindkit.sh); usr/bin/mindkit — команда
+  usr/lib/systemd/user/mindlink.service   служба MindLink (буфер, Handoff, MindDrop), включена для всех
+                            пользователей, ждёт входа устройства в аккаунт; порты открыты в ufw только для
+                            локальной сети (etc/ufw/applications.d/mindlink, правила в chroot-setup.sh)
+  usr/lib/aisktagos/mindkit-krunner.py    Mind Search в KRunner (D-Bus, usr/share/krunner/dbusplugins,
+                            запуск по требованию через usr/share/dbus-1/services)
 assets/                     генераторы графики (Pillow + rsvg-convert + шрифт Inter):
                             make-assets.py [icons|wallpapers|grub|slides], make-aurorae.py, make-plasma-theme.py;
                             grub и slides собираются без rsvg-convert (хоть на Windows)
 tools/test-vm.py            стенд QEMU: «железо» VMware, снимки экрана, клики, консоль ttyS0
+tools/sync-mindkit.sh       обновляет копию MindKit в overlay из репозитория MindTagSystem
 .github/workflows/build-iso.yml  сборка ISO (xz) и публикация в Releases (части по 1,9 ГБ, если больше 2 ГБ)
 ```
 

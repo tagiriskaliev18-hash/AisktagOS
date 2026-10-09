@@ -1,0 +1,18 @@
+[Desktop Entry]
+Name=Mind Search
+Name[ru]=Mind Search
+Comment=Apps of MindTagSystem, shortcuts, Handoff and project files
+Comment[ru]=Приложения MindTagSystem, быстрые команды, Handoff и файлы проектов
+Type=Service
+Icon=search
+X-KDE-ServiceTypes=Plasma/Runner
+X-KDE-PluginInfo-Author=Тагир Искалиев
+X-KDE-PluginInfo-Name=org.mindtagsystem.search
+X-KDE-PluginInfo-Version=1.0
+X-KDE-PluginInfo-License=MIT
+X-KDE-PluginInfo-EnabledByDefault=true
+X-Plasma-API-Minimum-Version=2.0
+X-Plasma-API=DBus
+X-Plasma-DBusRunner-Service=org.mindtagsystem.search
+X-Plasma-DBusRunner-Path=/runner
+X-Plasma-Runner-Min-Letter-Count=2

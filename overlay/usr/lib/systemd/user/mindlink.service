@@ -1,0 +1,13 @@
+[Unit]
+Description=MindLink: общий буфер, Handoff и MindDrop между устройствами MindTagSystem
+After=graphical-session.target network-online.target
+PartOf=graphical-session.target
+
+[Service]
+# Без ключа аккаунта служба ждёт: «mindkit link init» или «mindkit link join КЛЮЧ»
+ExecStart=/usr/bin/python3 -m mindkit link daemon --wait
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=graphical-session.target

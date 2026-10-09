@@ -1,0 +1,4 @@
+[MindLink]
+title=MindLink
+description=Общий буфер обмена, Handoff и MindDrop между устройствами MindTagSystem
+ports=47800/tcp|47801/udp

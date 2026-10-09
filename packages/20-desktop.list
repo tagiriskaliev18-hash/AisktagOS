@@ -60,4 +60,11 @@ gstreamer1.0-plugins-ugly
 # Для собственных утилит AIsktagOS
 python3-pyqt6
 python3-dbus
+# MindKit (экосистема MindTagSystem): KRunner-поиск, шифрование MindLink, связка ключей в KWallet,
+# общий буфер обмена и уведомления
+python3-gi
+python3-cryptography
+python3-keyring
+wl-clipboard
+libnotify-bin
 kdialog
