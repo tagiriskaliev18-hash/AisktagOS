@@ -59,6 +59,7 @@ panel.addWidget("org.kde.plasma.marginsseparator");
 panel.addWidget("org.kde.plasma.systemtray");
 
 // Часы в две строки, как в Windows: время и под ним дата
+panel.addWidget("org.aisktagos.mind");
 var clock = panel.addWidget("org.kde.plasma.digitalclock");
 clock.currentConfigGroup = ["Appearance"];
 clock.writeConfig("showDate", true);
