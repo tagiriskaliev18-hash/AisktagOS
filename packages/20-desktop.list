@@ -59,5 +59,6 @@ gstreamer1.0-plugins-bad
 gstreamer1.0-plugins-ugly
 # Для собственных утилит AIsktagOS
 python3-pyqt6
+python3-pyqt6.qtwebengine
 python3-dbus
 kdialog

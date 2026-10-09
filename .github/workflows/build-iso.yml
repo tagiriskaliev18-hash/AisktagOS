@@ -32,6 +32,9 @@ jobs:
         run: |
           python3 -m py_compile overlay/usr/lib/aisktagos/*.py overlay/usr/lib/aisktagos/ai/aisktag-ai-model             overlay/usr/bin/ai overlay/usr/bin/aisktag-new overlay/usr/bin/aisktag-doctor
           python3 assets/tokens.py --check
+          python3 -m py_compile overlay/usr/lib/aisktagos/aisktag-studio.py overlay/usr/lib/aisktagos/mind_studio/*.py
+          python3 tools/test-mind-router.py
+          python3 tools/test-studio.py
       - name: Каталог моделей, раскладка Plasma, правила polkit
         run: |
           python3 -c "import json; d = json.load(open('overlay/usr/share/aisktagos/ai/models.json')); assert d['models']"

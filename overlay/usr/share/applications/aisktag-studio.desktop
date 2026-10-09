@@ -1,0 +1,16 @@
+[Desktop Entry]
+Version=1.1
+Type=Application
+Name=Mind Studio
+Name[ru]=Mind Studio
+GenericName=AI Workspace
+GenericName[ru]=Рабочее место ИИ
+Comment=Ваши модели, Claude и Antigravity в одном разговоре
+Comment[ru]=Ваши модели, Claude и Antigravity в одном разговоре
+Exec=aisktag-studio
+Icon=aisktagos-mind
+Terminal=false
+StartupNotify=true
+StartupWMClass=Mind Studio
+Categories=Development;Utility;
+Keywords=ИИ;AI;агент;Claude;Antigravity;чат;код;studio;

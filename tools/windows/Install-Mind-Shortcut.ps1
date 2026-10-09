@@ -1,4 +1,4 @@
-﻿# Ярлык Mind на рабочем столе Windows: окно без консоли, своя иконка, запуск через launch-mind.py.
+﻿# Ярлык Mind на рабочем столе Windows: открывает Mind Studio (launch-studio.py) без консоли, со своей иконкой.
 #
 #   powershell -ExecutionPolicy Bypass -File tools\windows\Install-Mind-Shortcut.ps1 [-Python C:\путь\python.exe]
 #
@@ -7,12 +7,12 @@ param([string]$Python = "")
 
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
-$launcher = Join-Path $repo "launch-mind.py"
+$launcher = Join-Path $repo "launch-studio.py"
 $icon = Join-Path $PSScriptRoot "mind.ico"
 
 function Test-PyQt([string]$exe) {
     if (-not $exe -or -not (Test-Path $exe)) { return $false }
-    & $exe -c "import PyQt6.QtWidgets" 2>$null
+    & $exe -c "import PyQt6.QtWebEngineWidgets" 2>$null
     return $LASTEXITCODE -eq 0
 }
 
@@ -38,7 +38,8 @@ $s.TargetPath = $pyw
 $s.Arguments = "`"$launcher`""
 $s.WorkingDirectory = $repo
 $s.IconLocation = "$icon,0"
-$s.Description = "Mind — ИИ-ассистент AIsktagOS: много моделей в одном чате"
+$s.Description = "Mind Studio — ваши модели, Claude и Antigravity в одном разговоре"
 $s.Save()
 Write-Host "Ярлык обновлён: $lnk"
 Write-Host "  Python: $pyw"
+
