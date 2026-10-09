@@ -7,6 +7,10 @@
 Настройки: ~/.config/aisktagos/jarvis.json (base_url, model, api_key, vision, max_steps); чего там нет,
 берётся из настроек Mind (~/.config/aisktagos/ai.json). Переменные JARVIS_BASE_URL, JARVIS_MODEL,
 JARVIS_API_KEY важнее файла.
+
+Если сервер не может ответить (кончились токены, лимит запросов, ключ отозван, нет связи), Джарвис сам
+переходит к запасному поставщику из ~/.config/aisktagos/providers.json, а в конце — к встроенной модели,
+и говорит, кто теперь отвечает (см. aisktag_ai.chain).
 """
 from __future__ import annotations
 
@@ -29,7 +33,7 @@ import aisktag_browser as web
 import aisktag_jarvis_fast as fast
 
 # Версия кода Джарвиса: по ней `jarvis --update` решает, новее ли версия из релиза на GitHub
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 CONF = ai.USER_CONF.parent / "jarvis.json"
 LOG_DIR = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state")) / "aisktagos"
 TOOL_OUTPUT_LIMIT = 8000
@@ -456,6 +460,8 @@ def server_ctx(cfg: dict) -> int | None:
 
 
 def _post(cfg: dict, body: dict) -> dict:
+    if cfg.get("api") == "anthropic":
+        return ai.anthropic_message(cfg, body)
     req = urllib.request.Request(cfg["base_url"] + "/chat/completions", data=json.dumps(body).encode(),
                                  headers=ai._headers(cfg), method="POST")
     with urllib.request.urlopen(req, timeout=ai.READ_TIMEOUT) as r:
@@ -487,26 +493,28 @@ def _request(cfg: dict, messages: list, tools: list | None) -> dict:
                                  "(/new), закройте лишние программы или поставьте модель с большим контекстом: "
                                  "ai model") from e
             if e.code in (401, 403):
-                raise ai.AIError("Сервер ИИ отклонил ключ доступа (api_key в ~/.config/aisktagos/jarvis.json).") from e
-            if e.code == 503 and time.time() < deadline:          # «Loading model»
+                raise ai.ProviderDown("Сервер ИИ отклонил ключ доступа (api_key в ~/.config/aisktagos/jarvis.json).",
+                                      e.code) from e
+            if e.code == 503 and local and time.time() < deadline:          # «Loading model»
                 time.sleep(2)
                 continue
-            if e.code == 500 and "tools" in body and not without_tools:
+            if e.code == 500 and local and "tools" in body and not without_tools:
                 without_tools = True
                 body = {k: v for k, v in body.items() if k not in ("tools", "tool_choice")}
                 body["messages"] = messages[:1] + [{"role": "system", "content": _TOOLS_AS_TEXT}] + messages[1:]
                 continue
-            raise ai.AIError(f"Сервер ИИ ответил ошибкой {e.code}: {detail}") from e
+            # Кончились токены, лимит, сбой сервера — ProviderDown: Agent перейдёт к запасному поставщику
+            raise ai.http_failure(cfg, e, detail) from e
         except (urllib.error.URLError, ConnectionError, TimeoutError) as e:
             refused = isinstance(getattr(e, "reason", e), ConnectionRefusedError) or isinstance(e, ConnectionRefusedError)
             if local and not refused and not isinstance(e, TimeoutError) and time.time() < deadline:
                 time.sleep(2)                                     # служба модели перезапускается (обрыв)
                 continue
             if local:
-                raise ai.AIError("Локальная модель не отвечает: проверьте `ai status` (возможно, модель не "
-                                 "установлена или не хватает памяти: `ai model`) или подключите быструю облачную: "
-                                 "jarvis --setup") from e
-            raise ai.AIError(f"Не удалось подключиться к {cfg['base_url']}: {getattr(e, 'reason', e)}") from e
+                raise ai.ProviderDown("Локальная модель не отвечает: проверьте `ai status` (возможно, модель не "
+                                      "установлена или не хватает памяти: `ai model`) или подключите быструю облачную: "
+                                      "jarvis --setup") from e
+            raise ai.ProviderDown(f"Не удалось подключиться к {cfg['base_url']}: {getattr(e, 'reason', e)}") from e
         except (ValueError, KeyError, IndexError) as e:
             raise ai.AIError("Сервер ИИ вернул непонятный ответ") from e
 
@@ -573,6 +581,7 @@ class Agent:
     def __init__(self, confirm: Callable[[str, str], bool], on_event: Callable[[str, str], None],
                  cfg: dict | None = None):
         self.cfg = cfg or load_config()
+        self.base_cfg = self.cfg          # основной поставщик; self.cfg — тот, кто отвечает сейчас
         self.tools = Tools(confirm, bool(self.cfg.get("vision")))
         self.on_event = on_event
         self.compact = False
@@ -609,6 +618,63 @@ class Agent:
 
     def reset(self) -> None:
         self.messages = self.messages[:1]
+
+    def use_config(self, cfg: dict) -> None:
+        """Новый основной поставщик (после jarvis --setup в диалоге)."""
+        self.base_cfg = cfg
+        self._switch(cfg, quiet=True)
+
+    def _switch(self, cfg: dict, err: ai.AIError | None = None, quiet: bool = False) -> None:
+        """Перейти на другого поставщика: у встроенной модели свой контекст, промпт и набор инструментов."""
+        prev = self.cfg
+        self.cfg = cfg = dict(cfg)
+        if not cfg.get("_user_ctx"):
+            cfg["context_chars"] = 18000 if ai.is_local(cfg) else 300000
+        self.compact = False
+        self._ctx_checked = False
+        self.messages[0] = {"role": "system", "content": self._system()}
+        if quiet:
+            return
+        if err:
+            text = ai.switch_text(prev, cfg, err)
+        elif ai._key(cfg) == ai._key(self.base_cfg):
+            text = f"основной сервер снова доступен — отвечает {ai.label(cfg)}"
+        else:
+            text = f"{ai.label(self.base_cfg)} пока недоступен — отвечает {ai.label(cfg)}"
+        self._log("switch", text)
+        self.on_event("switch", text)
+
+    def _next_provider(self, failed: set) -> dict | None:
+        return next((c for c in ai.chain(self.base_cfg) if ai._key(c) not in failed), None)
+
+    def _back_to_main(self) -> None:
+        """Перед новой задачей: если основной поставщик снова доступен — возвращаемся к нему."""
+        best = next(iter(ai.chain(self.base_cfg)), None)
+        if best and ai._key(best) != ai._key(self.cfg):
+            self._switch(best)
+
+    def _call(self, task: str, tools: list[dict]) -> tuple[dict, list[dict]]:
+        """Запрос к модели с запасными поставщиками. Возвращает ответ и набор инструментов
+        (у встроенной модели после переключения он уже)."""
+        failed: set = set()
+        while True:
+            try:
+                msg = _request(self.cfg, self._trim(), tools)
+                ai.mark_ok(self.cfg)
+                ai.last_used = self.cfg
+                return msg, tools
+            except ai.ProviderDown as e:
+                ai.mark_down(self.cfg, e.code)
+                failed.add(ai._key(self.cfg))
+                nxt = self._next_provider(failed)
+                if nxt is None:
+                    raise
+                self._switch(nxt, e)
+                self._check_ctx()
+                tools = self._tools_for(task)
+
+    def _on_stream_switch(self, prev: dict, new: dict, err: ai.AIError) -> None:
+        self._switch(new, err)
 
     def close(self) -> None:
         self.tools.close()
@@ -656,7 +722,8 @@ class Agent:
         """Потоковый ответ: куски сразу на экран (событие chunk), но без служебных тегов шаблона
         (<tool_response>, <tools>…): текст после «<» придерживается, пока тег не закроется."""
         raw, held = [], ""
-        for piece in ai.stream_chat(msgs, self.cfg, max_tokens=max_tokens, should_stop=should_stop):
+        for piece in ai.stream_chat(msgs, self.cfg, max_tokens=max_tokens, should_stop=should_stop,
+                                    on_switch=self._on_stream_switch):
             raw.append(piece)
             held += piece
             cut = held.rfind("<")
@@ -710,6 +777,7 @@ class Agent:
                 self._log("fast", f"{task} → {quick}")
                 self.on_event("answer", quick)
                 return quick
+        self._back_to_main()
         self._check_ctx()
         # Малой локальной модели вопросы без действий отдаём в режим беседы: быстрее в разы
         # (нет 1–2 тыс. токенов описания инструментов) и без путаницы с вызовами
@@ -724,7 +792,7 @@ class Agent:
         for _step in range(int(self.cfg.get("max_steps", 30))):
             if should_stop and should_stop():
                 return "остановлено"
-            msg = _request(self.cfg, self._trim(), tools)
+            msg, tools = self._call(task, tools)
             calls = msg.get("tool_calls")
             content = (msg.get("content") or "").strip()
             if not calls:

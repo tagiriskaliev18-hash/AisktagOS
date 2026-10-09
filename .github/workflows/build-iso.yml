@@ -32,6 +32,7 @@ jobs:
         run: |
           python3 -m py_compile overlay/usr/lib/aisktagos/*.py overlay/usr/lib/aisktagos/ai/aisktag-ai-model             overlay/usr/bin/ai overlay/usr/bin/aisktag-new overlay/usr/bin/aisktag-doctor overlay/usr/bin/jarvis
           python3 tools/test-jarvis.py
+          python3 tools/test-fallback.py
           python3 assets/tokens.py --check
       - name: Каталог моделей, раскладка Plasma, правила polkit
         run: |

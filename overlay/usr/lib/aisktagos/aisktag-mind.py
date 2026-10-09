@@ -47,6 +47,7 @@ class Worker(QThread):
     """Читает поток ответа модели в отдельном потоке, чтобы окно не зависало."""
     chunk = pyqtSignal(str)
     failed = pyqtSignal(str)
+    switched = pyqtSignal(str)          # основной сервер не ответил — отвечает запасной
 
     def __init__(self, messages: list, cfg: dict):
         super().__init__()
@@ -54,7 +55,8 @@ class Worker(QThread):
 
     def run(self) -> None:
         try:
-            for piece in ai.stream_chat(self.messages, self.cfg, should_stop=lambda: self._stop):
+            for piece in ai.stream_chat(self.messages, self.cfg, should_stop=lambda: self._stop,
+                                        on_switch=lambda prev, new, err: self.switched.emit(ai.switch_text(prev, new, err))):
                 self.chunk.emit(piece)
         except ai.AIError as e:
             self.failed.emit(str(e))
@@ -354,6 +356,7 @@ class Mind(QWidget):
         self.worker = Worker(messages, self.cfg)
         self.worker.chunk.connect(self.on_chunk)
         self.worker.failed.connect(self.on_failed)
+        self.worker.switched.connect(lambda text: self.say(f"↪ {text}", 15000))
         self.worker.finished.connect(self.on_done)
         self.send_btn.setText("Стоп")
         self.worker.start()
