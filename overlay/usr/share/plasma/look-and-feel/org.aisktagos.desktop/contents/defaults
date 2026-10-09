@@ -19,6 +19,8 @@ cursorTheme=breeze_cursors
 [kwinrc][org.kde.kdecoration2]
 library=org.kde.kwin.aurorae
 theme=__aurorae__svg__AIsktagOS
+ButtonsOnLeft=
+ButtonsOnRight=IAX
 
 [kwinrc][WindowSwitcher]
 LayoutName=org.kde.breeze.desktop

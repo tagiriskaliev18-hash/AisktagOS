@@ -50,7 +50,7 @@ LOGO_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
 </svg>
 """
 
-# Монохромный значок для верхней панели (аналог «яблока» в строке меню)
+# Монохромный значок логотипа для панелей и значков в системном лотке
 LOGO_SYMBOLIC_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16">
   <style type="text/css" id="current-color-scheme">.ColorScheme-Text { color:#fcfcfc; }</style>
   <g class="ColorScheme-Text" fill="none" stroke="currentColor" stroke-width="1.6">
@@ -76,7 +76,7 @@ INSTALL_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
 
 
 def wallpaper(w: int, h: int, darken: float = 1.0) -> Image.Image:
-    """Мягкий «жидкий» градиент в духе обоев macOS."""
+    """Мягкий «жидкий» градиент: индиго → фиолетовый → бирюзовый (цвета логотипа)."""
     yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
     xx /= w
     yy /= h

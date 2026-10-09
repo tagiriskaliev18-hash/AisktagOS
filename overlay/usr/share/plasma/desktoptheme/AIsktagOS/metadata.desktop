@@ -1,9 +1,9 @@
 [Desktop Entry]
 Name=AIsktagOS Glass
-Comment=Стеклянные панели AIsktagOS: строка меню и плавающий док
+Comment=Стеклянная панель задач AIsktagOS Hybrid
 X-KDE-PluginInfo-Author=AIsktagOS
 X-KDE-PluginInfo-Name=AIsktagOS
-X-KDE-PluginInfo-Version=2.0
+X-KDE-PluginInfo-Version=3.0
 X-KDE-PluginInfo-License=GPL-2.0-or-later
 X-KDE-PluginInfo-EnabledByDefault=true
 X-Plasma-API=5.0

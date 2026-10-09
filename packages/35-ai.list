@@ -1,0 +1,9 @@
+# Встроенный ИИ Mind: библиотеки для движка llama.cpp
+# Vulkan-драйверы Mesa нужны, чтобы модель считалась на видеокарте AMD/Intel/NVIDIA (на процессоре работает и без них)
+libvulkan1
+mesa-vulkan-drivers
+libgomp1
+libcurl4t64
+jq
+curl
+policykit-1

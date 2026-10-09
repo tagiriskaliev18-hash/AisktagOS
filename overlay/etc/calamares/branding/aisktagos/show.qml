@@ -142,7 +142,7 @@ Presentation {
     InfoSlide {
         glyph: "👋"
         title: "Добро пожаловать в AIsktagOS"
-        body: "Удобство macOS, свобода Linux Mint и мощь Ubuntu LTS — в одной системе. Установка займёт 5–15 минут."
+        body: "Привычный рабочий стол как в Windows, свобода Linux и встроенный ИИ — в одной системе. Установка займёт 5–15 минут."
     }
     InfoSlide {
         glyph: "⌘"

@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Тема оформления окон AIsktagOS для KWin (Aurorae) «Frosted Glass».
+"""Тема оформления окон AIsktagOS для KWin (Aurorae) «Aurora Glass».
 
 Что даёт тема:
 - полупрозрачный заголовок-«стекло»: KWin размывает фон под ним, потому что в decoration.svg
   есть элементы mask-* (Aurorae передаёт их в setBlurRegion, нужен включённый эффект blur);
 - скругление углов 14 px, тонкая светящаяся кромка, блик по верхнему краю;
-- двухслойная мягкая тень (рассеянная + контактная) и едва заметное неоновое свечение
-  у активного окна;
-- кнопки-«светофор» слева: векторные круги с объёмной заливкой, полупрозрачной рамкой
-  и мягким ореолом при наведении/нажатии.
+- двухслойная мягкая тень (рассеянная + контактная) и едва заметное синее свечение у активного окна;
+- кнопки заголовка в стиле Windows справа: плоские значки «свернуть / развернуть / закрыть» на стекле,
+  при наведении подсвечиваются, «закрыть» краснеет. Заголовок выровнен по левому краю.
 
+Цвета берутся из дизайн-токенов (assets/tokens.py).
 Рамка рисуется растром (Pillow, сглаживание за счёт отрисовки в 4x) и нарезается на 9 частей
 FrameSvg, кнопки — чистый вектор. Фильтры SVG (feGaussianBlur) не используются: QtSvg их
 не поддерживает, поэтому свечение сделано радиальными градиентами.
@@ -20,6 +20,8 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter
 
+from tokens import rgb
+
 OUT = Path(__file__).resolve().parent.parent / "overlay/usr/share/aurorae/themes/AIsktagOS"
 
 SS = 4                                     # коэффициент суперсэмплинга
@@ -28,17 +30,18 @@ RADIUS = 14
 TITLE_H = 34
 CENTER = 40                                # размер растягиваемой середины
 
-CYAN = (34, 228, 255)
+GLOW = rgb("accent")                       # свечение активного окна
+RIM = rgb("focus")                         # светящаяся кромка
 
 STATES = {
     # префикс: параметры состояния
     "decoration": dict(
-        top=(30, 38, 62, 188), bottom=(18, 24, 42, 200),   # стекло: градиент заголовка
-        rim=(150, 215, 255, 64), highlight=(255, 255, 255, 34),
+        top=rgb("surface") + (190,), bottom=rgb("bg1") + (205,),   # стекло: градиент заголовка
+        rim=RIM + (52,), highlight=(255, 255, 255, 34),
         separator=(255, 255, 255, 14),
-        shadow=(150, 70), glow=26),
+        shadow=(150, 70), glow=30),
     "decoration-inactive": dict(
-        top=(26, 30, 44, 226), bottom=(20, 23, 34, 232),
+        top=rgb("bg2") + (228,), bottom=rgb("bg1") + (234,),
         rim=(255, 255, 255, 20), highlight=(255, 255, 255, 14),
         separator=(255, 255, 255, 8),
         shadow=(90, 40), glow=0),
@@ -79,7 +82,7 @@ def frame(st: dict) -> Image.Image:
     img = Image.alpha_composite(img, soft(w, h, win, RADIUS, (0, 0, 0, ambient), 13, dy=9))
     img = Image.alpha_composite(img, soft(w, h, win, RADIUS, (0, 0, 0, contact), 3, dy=2))
     if st["glow"]:
-        img = Image.alpha_composite(img, soft(w, h, win, RADIUS, CYAN + (st["glow"],), 7, grow=1))
+        img = Image.alpha_composite(img, soft(w, h, win, RADIUS, GLOW + (st["glow"],), 7, grow=1))
 
     # Тень не должна просвечивать сквозь стекло: вырезаем её под силуэтом окна
     shape = Image.new("L", (W, H), 0)
@@ -158,87 +161,65 @@ def decoration_svg() -> str:
             f'width="{w}" height="{offset_y}">\n' + "\n".join(parts) + "\n</svg>\n")
 
 
-# ---- Кнопки-«светофор» -------------------------------------------------------
-BTN = 18          # ячейка кнопки (место под ореол)
-R = 6.5           # радиус круга
-C = BTN / 2
+# ---- Кнопки заголовка в стиле Windows ---------------------------------------
+BTN_W, BTN_H = 34, 26     # ячейка кнопки (ширина, высота)
+BTN_R = 7                 # скругление подсветки при наведении
+SW = 1.4                  # толщина значка
+CX, CY = BTN_W / 2, BTN_H / 2
+RED, RED_PRESSED = "#e5484d", "#c53b40"
 
-BUTTONS = {
-    # файл: (основной цвет, светлый, тёмный, цвет значка, значок)
-    "close": ("#ff5f57", "#ff9a92", "#d93c34", "#5c0a06",
-              '<path d="M6.6 6.6l4.8 4.8M11.4 6.6l-4.8 4.8"/>'),
-    "minimize": ("#febc2e", "#ffdb7a", "#d9960f", "#5e3a00", '<path d="M6 9h6"/>'),
-    "maximize": ("#28c840", "#74e57f", "#159a2b", "#063d0e",
-                 '<path d="M6.3 9h5.4M9 6.3v5.4"/>'),
-    "restore": ("#28c840", "#74e57f", "#159a2b", "#063d0e", '<path d="M6.3 9h5.4"/>'),
+GLYPHS = {
+    "close": f'<path d="M{CX - 4.5} {CY - 4.5}l9 9M{CX + 4.5} {CY - 4.5}l-9 9"/>',
+    "minimize": f'<path d="M{CX - 5} {CY + 0.5}h10"/>',
+    "maximize": f'<rect x="{CX - 5}" y="{CY - 4.5}" width="10" height="9" rx="1.5"/>',
+    "restore": (f'<rect x="{CX - 5}" y="{CY - 2.5}" width="8" height="7" rx="1.2"/>'
+                f'<path d="M{CX - 2.5} {CY - 2.5}V{CY - 4}a1.2 1.2 0 0 1 1.2-1.2H{CX + 4}'
+                f'A1.2 1.2 0 0 1 {CX + 5.2} {CY - 4}v6a1.2 1.2 0 0 1-1.2 1.2H{CX + 3}"/>'),
 }
-
-GRAPHITE = ("#3b4257", "#566079", "#2a3042")
-DISABLED = ("#2c3142", "#363c50", "#232736")
-
-
-def gradients(uid: str, base: str, light: str, dark: str) -> str:
-    return (
-        f'<radialGradient id="f-{uid}" cx="0.38" cy="0.32" r="0.75">'
-        f'<stop offset="0" stop-color="{light}"/><stop offset="0.55" stop-color="{base}"/>'
-        f'<stop offset="1" stop-color="{dark}"/></radialGradient>'
-        f'<radialGradient id="g-{uid}" cx="0.5" cy="0.5" r="0.5">'
-        f'<stop offset="0.55" stop-color="{base}" stop-opacity="0.55"/>'
-        f'<stop offset="0.78" stop-color="{base}" stop-opacity="0.18"/>'
-        f'<stop offset="1" stop-color="{base}" stop-opacity="0"/></radialGradient>')
+INK, INK_INACTIVE, INK_OFF = "#dfe6ff", "#7d849c", "#4a5068"
 
 
 def button_svg(name: str) -> str:
-    base, light, dark, ink, glyph = BUTTONS[name]
     states = [
-        # имя, палитра, значок, ореол, затемнение
-        ("active", "c", False, 0.0, 0.0),
-        ("hover", "c", True, 1.0, 0.0),
-        ("pressed", "c", True, 0.7, 0.28),
-        ("inactive", "g", False, 0.0, 0.0),
-        ("hover-inactive", "c", True, 1.0, 0.0),
-        ("pressed-inactive", "c", True, 0.7, 0.28),
-        ("deactivated", "d", False, 0.0, 0.0),
-        ("deactivated-inactive", "d", False, 0.0, 0.0),
+        # имя состояния, цвет значка, непрозрачность значка, цвет подложки или None, непрозрачность подложки
+        ("active", INK, 0.92, None, 0),
+        ("hover", "#ffffff" if name == "close" else INK, 1.0, RED if name == "close" else "#ffffff",
+         1.0 if name == "close" else 0.12),
+        ("pressed", "#ffffff" if name == "close" else INK, 1.0, RED_PRESSED if name == "close" else "#ffffff",
+         1.0 if name == "close" else 0.2),
+        ("inactive", INK_INACTIVE, 0.9, None, 0),
+        ("hover-inactive", "#ffffff" if name == "close" else INK, 1.0, RED if name == "close" else "#ffffff",
+         1.0 if name == "close" else 0.1),
+        ("pressed-inactive", "#ffffff" if name == "close" else INK, 1.0, RED_PRESSED if name == "close" else "#ffffff",
+         1.0 if name == "close" else 0.18),
+        ("deactivated", INK_OFF, 0.7, None, 0),
+        ("deactivated-inactive", INK_OFF, 0.7, None, 0),
     ]
-    defs = (gradients("c", base, light, dark) + gradients("g", *GRAPHITE)
-            + gradients("d", *DISABLED)
-            + '<linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">'
-              '<stop offset="0" stop-color="#fff" stop-opacity="0.55"/>'
-              '<stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>')
     out = []
-    for i, (state, pal, show_glyph, halo, shade) in enumerate(states):
-        x = i * (BTN + 2)
+    for i, (state, ink, ink_op, bg, bg_op) in enumerate(states):
+        x = i * (BTN_W + 2)
         g = [f'<g id="{state}-center">',
              # Невидимый прямоугольник задаёт размер элемента для Aurorae
-             f'<rect x="{x}" y="0" width="{BTN}" height="{BTN}" fill="#000" fill-opacity="0.001"/>']
-        if halo:
-            g.append(f'<circle cx="{x + C}" cy="{C}" r="{C}" fill="url(#g-{pal})" opacity="{halo}"/>')
-        g.append(f'<circle cx="{x + C}" cy="{C}" r="{R}" fill="url(#f-{pal})"/>')
-        if shade:
-            g.append(f'<circle cx="{x + C}" cy="{C}" r="{R}" fill="#000" fill-opacity="{shade}"/>')
-        # Стеклянный блик в верхней половине
-        g.append(f'<ellipse cx="{x + C}" cy="{C - 2.6}" rx="{R * 0.62:.2f}" ry="{R * 0.42:.2f}" '
-                 f'fill="url(#shine)" opacity="{0.35 if pal == "c" else 0.18}"/>')
-        # Полупрозрачная двойная рамка: тёмная снаружи, светлая внутри
-        g.append(f'<circle cx="{x + C}" cy="{C}" r="{R - 0.3}" fill="none" stroke="#000" '
-                 f'stroke-opacity="0.32" stroke-width="0.6"/>')
-        g.append(f'<circle cx="{x + C}" cy="{C}" r="{R - 1}" fill="none" stroke="#fff" '
-                 f'stroke-opacity="{0.22 if pal == "c" else 0.08}" stroke-width="0.6"/>')
-        if show_glyph:
-            g.append(f'<g transform="translate({x} 0)" stroke="{ink}" stroke-opacity="0.8" '
-                     f'stroke-width="1.5" stroke-linecap="round" fill="none">{glyph}</g>')
+             f'<rect x="{x}" y="0" width="{BTN_W}" height="{BTN_H}" fill="#000" fill-opacity="0.001"/>']
+        if bg:
+            g.append(f'<rect x="{x + 1}" y="1" width="{BTN_W - 2}" height="{BTN_H - 2}" rx="{BTN_R}" '
+                     f'fill="{bg}" fill-opacity="{bg_op}"/>')
+        g.append(f'<g transform="translate({x} 0)" stroke="{ink}" stroke-opacity="{ink_op}" stroke-width="{SW}" '
+                 f'stroke-linecap="round" stroke-linejoin="round" fill="none">{GLYPHS[name]}</g>')
         g.append("</g>")
         out.append("".join(g))
-    width = len(states) * (BTN + 2)
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{BTN}">\n'
-            f'<defs>{defs}</defs>\n' + "\n".join(out) + "\n</svg>\n")
+    width = len(states) * (BTN_W + 2)
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{BTN_H}">\n'
+            + "\n".join(out) + "\n</svg>\n")
+
+
+BUTTONS = tuple(GLYPHS)
 
 
 RC = f"""[General]
 ActiveTextColor=#eef3ff
 InactiveTextColor=#7d849c
-TitleAlignment=Center
+TitleAlignment=Left
 TitleVerticalAlignment=Center
 Animation=160
 Shadow=true
@@ -249,22 +230,22 @@ BorderRight=0
 BorderBottom=0
 TitleEdgeTop=0
 TitleEdgeBottom=0
-TitleEdgeLeft=12
-TitleEdgeRight=12
+TitleEdgeLeft=14
+TitleEdgeRight=8
 TitleEdgeTopMaximized=0
 TitleEdgeBottomMaximized=0
-TitleEdgeLeftMaximized=12
-TitleEdgeRightMaximized=12
+TitleEdgeLeftMaximized=14
+TitleEdgeRightMaximized=0
 TitleBorderLeft=8
 TitleBorderRight=8
 TitleHeight={TITLE_H}
 TitleHeightMaximized={TITLE_H - 4}
-ButtonWidth={BTN}
-ButtonHeight={BTN}
+ButtonWidth={BTN_W}
+ButtonHeight={BTN_H}
 ButtonSpacing=2
-ButtonMarginTop={(TITLE_H - BTN) // 2}
-ButtonMarginTopMaximized={(TITLE_H - 4 - BTN) // 2}
-ExplicitButtonSpacer=10
+ButtonMarginTop={(TITLE_H - BTN_H) // 2}
+ButtonMarginTopMaximized={(TITLE_H - 4 - BTN_H) // 2}
+ExplicitButtonSpacer=6
 PaddingTop={PAD_TOP}
 PaddingBottom={PAD_BOTTOM}
 PaddingLeft={PAD_SIDE}
@@ -273,10 +254,10 @@ PaddingRight={PAD_SIDE}
 
 METADATA_DESKTOP = """[Desktop Entry]
 Name=AIsktagOS
-Comment=Стеклянная тема окон с кнопками-«светофором»
+Comment=Стеклянная тема окон Aurora Glass: кнопки справа, как в Windows
 X-KDE-PluginInfo-Author=AIsktagOS
 X-KDE-PluginInfo-Name=AIsktagOS
-X-KDE-PluginInfo-Version=2.0
+X-KDE-PluginInfo-Version=3.0
 X-KDE-PluginInfo-License=GPL-2.0-or-later
 X-KDE-PluginInfo-EnabledByDefault=true
 """
@@ -284,11 +265,11 @@ X-KDE-PluginInfo-EnabledByDefault=true
 METADATA_JSON = """{
     "KPlugin": {
         "Authors": [ { "Name": "AIsktagOS" } ],
-        "Description": "Стеклянная тема окон с кнопками-«светофором»",
+        "Description": "Стеклянная тема окон Aurora Glass: кнопки справа, как в Windows",
         "Id": "AIsktagOS",
         "License": "GPL-2.0-or-later",
         "Name": "AIsktagOS",
-        "Version": "2.0"
+        "Version": "3.0"
     }
 }
 """

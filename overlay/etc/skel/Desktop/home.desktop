@@ -1,0 +1,7 @@
+[Desktop Entry]
+Type=Application
+Name=Домашняя папка
+Name[en]=Home
+Icon=user-home
+Exec=sh -c 'exec dolphin "$HOME"'
+Terminal=false

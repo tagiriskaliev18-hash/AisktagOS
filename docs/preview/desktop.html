@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>AIsktagOS 1.1 «Hybrid» — макет рабочего стола</title>
+<style>
+  /* МАКЕТ-иллюстрация: показывает раскладку и палитру Aurora. Реальный вид — в Plasma (см. docs/DESIGN.md). */
+  :root{--bg0:#070b16;--bg1:#0b1020;--bg2:#111a33;--surface:#16203d;--surface2:#1e2a50;--text:#eef3ff;--text2:#b8c2e0;--muted:#8f9abf;
+        --accent:#3d7bff;--accent-s:#2a5be0;--focus:#22e4ff;--ai:#8b5cf6;--ai-t:#b79cff;--ok:#2fd27a;--warn:#febc2e;--danger:#ff5f57}
+  *{box-sizing:border-box;margin:0}
+  html,body{height:100%;background:#000;overflow:hidden}
+  body{font:13px/1.35 Inter,'Segoe UI',system-ui,sans-serif;color:var(--text)}
+  #screen{position:relative;width:100vw;height:100vh;min-width:1100px;
+          background:url('../../overlay/usr/share/wallpapers/AIsktagOS/contents/images/1920x1080.jpg') center/cover,#0b1020;overflow:hidden}
+  /* значки на столе */
+  .icons{position:absolute;left:18px;top:16px;display:grid;gap:14px}
+  .ic{width:78px;text-align:center;font-size:12px;text-shadow:0 1px 3px #000c}
+  .ic i{display:block;margin:0 auto 5px;width:46px;height:46px;border-radius:12px;display:grid;place-items:center;font-style:normal;font-size:24px;
+        background:linear-gradient(145deg,#ffffff22,#ffffff08);border:1px solid #ffffff26;backdrop-filter:blur(8px)}
+  /* окна */
+  .win{position:absolute;border-radius:14px;background:#0b1020e6;border:1px solid #22e4ff33;overflow:hidden;
+       box-shadow:0 18px 50px #000a,0 0 0 1px #3d7bff22,0 0 28px #3d7bff1f}
+  .win.inactive{box-shadow:0 12px 34px #0009;border-color:#ffffff1a}
+  .tb{height:34px;display:flex;align-items:center;padding-left:14px;background:linear-gradient(#16203dc2,#0b1020d0);backdrop-filter:blur(14px);
+      border-bottom:1px solid #ffffff12;font-weight:500;font-size:12.5px;color:var(--text)}
+  .tb .t{flex:1}
+  .btns{display:flex;margin-right:8px}
+  .btns b{width:34px;height:26px;display:grid;place-items:center;border-radius:7px;color:#dfe6ff;font-weight:400;font-size:13px}
+  .btns b.hv{background:#ffffff1f}.btns b.x:hover,.btns b.hot{background:var(--danger);color:#fff}
+  /* терминал */
+  .term{background:var(--bg0);font:12.5px/1.55 'JetBrains Mono',Consolas,monospace;padding:12px 14px;height:calc(100% - 34px);color:#e4e9ff;white-space:pre-wrap}
+  .term .d{color:#22e4ff;font-weight:700}.term .g{color:#a78bfa;font-weight:700}.term .p{color:#3d7bff}.term .r{color:#ff5f57}.term .m{color:#8f9abf}.term .y{color:#febc2e}
+  /* Mind */
+  .mind{background:var(--bg1);height:calc(100% - 34px);display:flex;flex-direction:column}
+  .mhead{display:flex;align-items:center;gap:10px;padding:9px 14px;background:var(--bg2);border-bottom:1px solid #22e4ff1f}
+  .mhead b{color:var(--ai-t);font-size:15px}.chip{background:var(--surface);border:1px solid #22e4ff2e;border-radius:12px;padding:2px 10px;font-size:12px}
+  .chip s{color:var(--ok);text-decoration:none}
+  .feed{flex:1;padding:14px;display:grid;align-content:start;gap:10px;overflow:hidden}
+  .msg{border-radius:14px;padding:10px 14px}
+  .u{background:#2a5be038;border:1px solid #3d7bff73}
+  .a{background:var(--surface);border:1px solid #b79cff40;border-left:3px solid var(--ai)}
+  .who{font-size:10px;font-weight:700;letter-spacing:1px;margin-bottom:4px}
+  .msg code{font:12px 'JetBrains Mono',Consolas,monospace;background:var(--bg0);padding:2px 6px;border-radius:5px;color:#b9f3ff}
+  .in{margin:0 14px 14px;display:flex;gap:8px}
+  .in div{flex:1;background:var(--surface2);border:1px solid #22e4ff;border-radius:14px;padding:10px 12px;color:var(--muted)}
+  .in span{background:var(--ai);border-radius:9px;padding:10px 18px;font-weight:600;align-self:stretch;display:grid;place-items:center}
+  /* панель задач */
+  #bar{position:absolute;left:0;right:0;bottom:0;height:48px;display:flex;align-items:center;gap:4px;padding:0 6px;
+       background:#0b1020c7;backdrop-filter:blur(22px) saturate(1.6);border-top:1px solid #22e4ff38;box-shadow:inset 0 1px 0 #ffffff1a}
+  .tk{position:relative;width:40px;height:40px;border-radius:9px;display:grid;place-items:center;font-size:20px}
+  .tk:hover{background:#ffffff14}.tk.on{background:#3d7bff2e}
+  .tk.on::after{content:"";position:absolute;left:9px;right:9px;bottom:1px;height:3px;border-radius:2px;background:var(--accent)}
+  .tk.on.ai::after{background:var(--ai-t)}
+  .ico{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-size:15px;color:#fff;font-weight:700}
+  .start{width:42px;height:40px}
+  .sep{width:1px;height:26px;background:linear-gradient(transparent,#22e4ff66,transparent);margin:0 4px}
+  .sp{flex:1}
+  .pager{display:flex;gap:4px;padding:0 6px}
+  .pager i{width:32px;height:22px;border-radius:4px;border:1px solid #ffffff2e;background:#ffffff0d;position:relative}
+  .pager i.cur{border-color:var(--accent);background:#3d7bff33}
+  .pager i.cur::after{content:"";position:absolute;inset:3px 6px 8px 4px;background:#ffffff40;border-radius:2px}
+  .tray{display:flex;gap:10px;padding:0 10px;color:var(--text2);font-size:15px}
+  .clock{text-align:right;line-height:1.15;padding:0 10px;font-weight:500;font-size:12.5px}
+  .clock small{display:block;color:var(--text2);font-size:11.5px;font-weight:400}
+  .show{width:8px;height:100%;border-left:1px solid #ffffff2e;margin-left:2px}
+  .note{position:absolute;right:14px;top:12px;background:#000a;border:1px solid #ffffff22;border-radius:10px;padding:6px 10px;font-size:11.5px;color:#cfd7f5}
+</style>
+</head>
+<body>
+<div id="screen">
+  <div class="note">Макет · AIsktagOS 1.1 «Hybrid»</div>
+  <div class="icons">
+    <div class="ic"><i>🖥️</i>Этот компьютер</div>
+    <div class="ic"><i>🏠</i>Домашняя папка</div>
+    <div class="ic"><i>🗑️</i>Корзина</div>
+    <div class="ic"><i><svg width="26" height="26" viewBox="0 0 256 256"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6d5dfc"/><stop offset=".55" stop-color="#8b5cf6"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs><rect x="8" y="8" width="240" height="240" rx="56" fill="url(#g)"/><circle cx="100" cy="128" r="58" fill="none" stroke="#fff" stroke-width="20"/><circle cx="156" cy="128" r="58" fill="none" stroke="#fff" stroke-opacity=".72" stroke-width="20"/></svg></i>Центр AIsktagOS</div>
+  </div>
+
+  <!-- терминал -->
+  <div class="win inactive" style="left:150px;top:70px;width:560px;height:360px">
+    <div class="tb"><span class="t">kitty — ~/projects/api</span><div class="btns"><b>—</b><b>▢</b><b class="x">✕</b></div></div>
+    <div class="term"><span class="d">~/projects/api</span> <span class="g">⎇ main</span> <span class="m">⏱ 3s</span>
+<span class="p">❯</span> cargo build
+<span class="r">error[E0382]</span>: borrow of moved value: `config`
+<span class="m">  --&gt; src/main.rs:14:20</span>
+<span class="p">❯</span> ai why
+<span class="g">Mind:</span> значение <code>config</code> перемещено в строке 11 и затем используется.
+Передайте ссылку: <span class="y">load(&amp;config)</span> или добавьте <span class="y">.clone()</span>.
+<span class="p">❯</span> <span class="m">найти файлы больше 100 МБ</span>   <span class="g">← Ctrl+G</span>
+<span class="p">❯</span> find . -type f -size +100M<span class="d">█</span></div>
+  </div>
+
+  <!-- Mind -->
+  <div class="win" style="left:540px;top:46px;width:560px;height:470px">
+    <div class="tb"><span class="t">Mind — ИИ-ассистент</span><div class="btns"><b>—</b><b class="hv">▢</b><b class="x">✕</b></div></div>
+    <div class="mind">
+      <div class="mhead"><b>Mind</b><span class="chip"><s>●</s> модель готова</span><span style="flex:1"></span><span class="chip">Программист ▾</span></div>
+      <div class="feed">
+        <div class="msg u"><div class="who" style="color:var(--accent)">ВЫ</div>Как отменить последний коммит, но оставить изменения?</div>
+        <div class="msg a"><div class="who" style="color:var(--ai-t)">MIND</div>Используйте мягкий сброс:<br><br><code>git reset --soft HEAD~1</code><br><br>Коммит исчезнет из истории, а изменения останутся в индексе. Для жёсткого отката без сохранения: <code>--hard</code> (необратимо!).</div>
+      </div>
+      <div class="in"><div>Спросите что угодно о коде, терминале или системе…</div><span>Отправить</span></div>
+    </div>
+  </div>
+
+  <!-- панель задач -->
+  <div id="bar">
+    <div class="tk start"><svg width="30" height="30" viewBox="0 0 256 256"><rect x="8" y="8" width="240" height="240" rx="56" fill="url(#g)"/><circle cx="100" cy="128" r="58" fill="none" stroke="#fff" stroke-width="20"/><circle cx="156" cy="128" r="58" fill="none" stroke="#fff" stroke-opacity=".72" stroke-width="20"/></svg></div>
+    <div class="sep"></div>
+    <div class="tk on ai"><div class="ico" style="background:linear-gradient(135deg,#6d3df0,#22d3ee)">✦</div></div>
+    <div class="tk"><div class="ico" style="background:#2a5be0">📁</div></div>
+    <div class="tk"><div class="ico" style="background:#e66000">🦊</div></div>
+    <div class="tk on"><div class="ico" style="background:#111a33;border:1px solid #22e4ff66;color:#22e4ff">&gt;_</div></div>
+    <div class="tk"><div class="ico" style="background:#0078d4">&lt;/&gt;</div></div>
+    <div class="tk"><div class="ico" style="background:#1d99f3">🛍</div></div>
+    <div class="tk"><div class="ico" style="background:#6d5dfc">⌂</div></div>
+    <div class="tk"><div class="ico" style="background:#4b5578">⚙</div></div>
+    <div class="sp"></div>
+    <div class="pager"><i class="cur"></i><i></i><i></i><i></i></div>
+    <div class="sep"></div>
+    <div class="tray"><span>🛡</span><span>📶</span><span>🔊</span><span>🔋</span></div>
+    <div class="clock">14:32<small>05.10.2026</small></div>
+    <div class="show"></div>
+  </div>
+</div>
+</body>
+</html>

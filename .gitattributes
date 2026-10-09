@@ -1,0 +1,6 @@
+# –епозиторий собираетс€ на Linux: везде LF, даже при работе на Windows
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ico binary
+*.gguf binary

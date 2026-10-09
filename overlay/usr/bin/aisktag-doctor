@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""aisktag-doctor — проверка, что рабочее место разработчика на AIsktagOS настроено, и подсказки, что исправить.
+
+    aisktag-doctor            показать результаты
+Код возврата 1, если есть пункты «требует внимания».
+"""
+import getpass
+import grp
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+sys.path.insert(0, "/usr/lib/aisktagos")
+
+OK, WARN, BAD = "\033[32m✔\033[0m", "\033[33m!\033[0m", "\033[31m✘\033[0m"
+problems = 0
+
+
+def out(cmd: list[str]) -> str:
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=8).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def check(mark: str, title: str, hint: str = "") -> None:
+    global problems
+    problems += mark == BAD
+    print(f" {mark} {title}" + (f"\n      → {hint}" if hint and mark != OK else ""))
+
+
+def groups() -> set[str]:
+    return {grp.getgrgid(g).gr_name for g in os.getgroups()}
+
+
+def main() -> None:
+    user = getpass.getuser()
+    print(f"\nПроверка рабочего места ({user})\n")
+
+    print("Git и SSH")
+    name, mail = out(["git", "config", "--global", "user.name"]), out(["git", "config", "--global", "user.email"])
+    check(OK if name and mail else BAD, f"Git: {name or '—'} <{mail or '—'}>", "Центр AIsktagOS → Разработка → «Сохранить для Git»")
+    key = Path.home() / ".ssh/id_ed25519"
+    check(OK if key.exists() else WARN, "SSH-ключ ~/.ssh/id_ed25519", "Центр AIsktagOS → Разработка → «Создать SSH-ключ»")
+    check(OK if shutil.which("gh") and out(["gh", "auth", "status"]) is not None and
+          subprocess.run(["gh", "auth", "status"], capture_output=True).returncode == 0 else WARN,
+          "GitHub CLI авторизован", "выполните: gh auth login")
+
+    print("\nКонтейнеры и виртуализация")
+    g = groups()
+    check(OK if "docker" in g else WARN, "Пользователь в группе docker (docker без sudo)",
+          "sudo usermod -aG docker $USER и перезайдите; либо используйте podman без root")
+    check(OK if shutil.which("podman") else WARN, "Podman установлен")
+    kvm = Path("/dev/kvm").exists()
+    check(OK if kvm and "kvm" in g else (WARN if kvm else WARN), "KVM (аппаратная виртуализация)" + ("" if kvm else " — /dev/kvm нет"),
+          "включите виртуализацию в BIOS/гипервизоре; sudo usermod -aG kvm $USER" if kvm else "в виртуальной машине включите вложенную виртуализацию")
+
+    print("\nСистема")
+    watches = Path("/proc/sys/fs/inotify/max_user_watches")
+    n = int(watches.read_text()) if watches.exists() else 0
+    check(OK if n >= 262144 else BAD, f"Лимит наблюдателей файлов: {n}", "sudo sysctl --system (настройки лежат в /etc/sysctl.d/90-aisktagos-dev.conf)")
+    snap = Path("/etc/timeshift/timeshift.json").exists()
+    check(OK if snap else WARN, "Снимки системы (Timeshift) настроены", "доступны только на Btrfs после установки на диск")
+    free = shutil.disk_usage("/").free / 1e9
+    check(OK if free > 10 else WARN, f"Свободно на диске: {free:.0f} ГБ", "освободите место: docker system prune, ncdu /")
+
+    print("\nИИ Mind")
+    try:
+        import aisktag_ai as ai
+        info = ai.list_models()
+        state = ai.backend_state()
+        check(OK if state in ("ready", "idle", "loading") else BAD, f"Служба ИИ: {state}", "systemctl status aisktag-llm.socket; journalctl -u aisktag-llm-backend")
+        active = next((m for m in info["models"] if m["id"] == info["active"]), None)
+        have = bool(active and active.get("installed", active.get("bundled")))
+        check(OK if have else BAD, f"Активная модель: {info['active']}", "ai model install lite")
+        rec = ai.recommend_model()
+        check(OK if rec == info["active"] else WARN, f"Подходящая для памяти ({ai.ram_mb() // 1024} ГБ) модель: {rec}",
+              f"ai model install {rec} && ai model use {rec}")
+    except ImportError:
+        check(WARN, "Библиотека ИИ не найдена (запуск не в AIsktagOS?)")
+
+    print()
+    print("Всё в порядке." if not problems else f"Требует внимания: {problems}.")
+    sys.exit(1 if problems else 0)
+
+
+if __name__ == "__main__":
+    main()

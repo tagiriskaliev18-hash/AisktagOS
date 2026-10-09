@@ -1,28 +1,33 @@
 [org.kde.kdecoration2]
 library=org.kde.kwin.aurorae
 theme=__aurorae__svg__AIsktagOS
-ButtonsOnLeft=XIA
-ButtonsOnRight=
+# Кнопки справа, как в Windows: свернуть, развернуть, закрыть
+ButtonsOnLeft=
+ButtonsOnRight=IAX
 BorderSize=None
 BorderSizeAuto=false
+
+[Desktops]
+# Виртуальные рабочие столы (Linux): четыре в ряд, их показывает панель задач
+Number=4
+Rows=1
 
 [Plugins]
 blurEnabled=true
 contrastEnabled=true
 wobblywindowsEnabled=false
-magiclampEnabled=true
-squashEnabled=false
+# Сворачивание «Squash» вместо «волшебной лампы» macOS
+magiclampEnabled=false
+squashEnabled=true
 
 [Effect-blur]
-# Матовое стекло: сильное размытие + лёгкое «зерно» (тема окон и панели прозрачны)
+# Матовое стекло: сильное размытие + лёгкое «зерно» (тема окон и панель прозрачны)
 BlurStrength=11
 NoiseStrength=5
 
 [Effect-overview]
-BorderActivate=5
-
-[ElectricBorders]
-TopLeft=None
+# Обзор окон: Meta+Tab / Meta+W или левый верхний угол экрана (левый нижний занят кнопкой «Пуск»)
+BorderActivate=7
 
 [Windows]
 ElectricBorderMaximize=true

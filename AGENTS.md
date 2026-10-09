@@ -1,108 +1,110 @@
 # AIsktagOS: передача проекта ИИ-агенту (Claude Code, Antigravity/Gemini и др.)
 
-Этот файл для ИИ-ассистента, который продолжает работу над проектом на другом компьютере. Прочитайте его целиком, прежде чем что-то менять. Пользователь общается по-русски, поэтому отвечайте и пишите комментарии в коде на русском.
+Этот файл для ИИ-ассистента, который продолжает работу над проектом. Прочитайте его целиком, прежде чем что-то менять. Пользователь общается по-русски, поэтому отвечайте и пишите комментарии в коде на русском.
 
 ## Что это
 
-AIsktagOS — дистрибутив Linux для программистов. Пользователь хотел систему «между macOS и Linux Mint», похожую по ощущениям на Хакинтош, но работающую на любом ПК и с любой видеокартой. Главные требования:
+AIsktagOS — дистрибутив Linux для программистов со встроенным ИИ. История требований:
 
-- ISO-образ можно записать на флешку (Rufus, balenaEtcher, Ventoy) или запустить в **VMware**;
-- **установщик простой и пошаговый, как у Windows**;
-- интерфейс как у macOS: строка меню сверху, док снизу, кнопки-«светофор», Spotlight, Mission Control;
-- удобство и надёжность как у Mint: снимки Timeshift, менеджер драйверов, центр приветствия, никаких snap;
-- для разработчика всё готово из коробки.
+1. Версия 1.0 «Genesis»: «между macOS и Linux Mint», интерфейс как у macOS (строка меню, док, «светофор»).
+2. Версия 1.1 «Hybrid» (текущая): по просьбе пользователя рабочий стол **«между Windows и Linux»**, **встроенная модель ИИ (Mind)** и полный набор для разработки, единый уникальный дизайн «Aurora».
+
+Неизменные требования: ISO для флешки (Rufus, balenaEtcher, Ventoy) и ВМ (VMware, VirtualBox); установщик простой и пошаговый, как у Windows; любая видеокарта; надёжность как у Mint (снимки Timeshift, менеджер драйверов, никаких snap).
 
 ## Архитектурные решения (менять только с веской причиной)
 
 | Решение | Почему |
 |---|---|
-| База **Ubuntu 26.04 LTS «resolute»**, а не своё ядро | Драйверы всех видеокарт (amdgpu, i915/xe, nouveau/NVK, NVIDIA 580, vmwgfx) — только так реально «любая видеокарта». Mint тоже на Ubuntu LTS |
-| **KDE Plasma 6.6** | Единственный DE, где можно собрать строку меню с глобальным меню и плавающий док штатными средствами (look-and-feel + layout.js) |
-| **Calamares** | Установщик-мастер как у Windows, его же использует Kubuntu 26.04, конфиги которого взяты за основу |
-| **casper** (live-система Ubuntu) + сборка вручную debootstrap → squashfs → xorriso | Без live-build: проще, прозрачнее, полный контроль |
-| **Btrfs + Timeshift**, подтома `@`, `@home`, `@cache`, `@log` | Снимок перед каждым apt (хук `80aisktagos-snapshot`) даёт откат обновлений |
-| **shim + подписанный GRUB Ubuntu** | Secure Boot работает без отключения |
-| Без snap (pin `snapd` = -10), Firefox из репозитория Mozilla, VS Code из репозитория Microsoft | Как в Mint |
+| База **Ubuntu 24.04 LTS «noble»** (переход с 26.04 в коммите `e5d8989`; `config.env` — источник правды) | Драйверы всех видеокарт, стабильный LTS до 2029. README и этот файл раньше называли 26.04/Plasma 6.6 — это было устаревшим |
+| **KDE Plasma 5.27 / Qt 5** | Версия Ubuntu 24.04. Никаких решений, требующих Plasma 6, Qt 6, Latte Dock, сторонних PPA, snap. PyQt6-приложения (Центр, Mind) работают отдельно от Qt 5 Plasma |
+| Раскладка «Hybrid»: панель задач снизу, значки на столе, кнопки справа | Просьба пользователя; штатные средства Plasma (look-and-feel + layout.js), без сторонних виджетов |
+| **Calamares** | Установщик-мастер как у Windows; конфиги взяты у Kubuntu |
+| **casper** + сборка вручную debootstrap → squashfs → xorriso | Без live-build: прозрачно, полный контроль |
+| **Btrfs + Timeshift**, подтома `@`, `@home`, `@cache`, `@log` | Снимок перед каждым apt (хук `80aisktagos-snapshot`) даёт откат |
+| **shim + подписанный GRUB Ubuntu** | Secure Boot без отключения |
+| Без snap (pin `snapd` = -10), Firefox из репозитория Mozilla, VS Code из Microsoft | Как в Mint |
+| **ИИ: llama.cpp + systemd socket activation**, не Ollama | Лёгкий статический движок (MIT), закреплённая сборка с SHA-256, ноль памяти в простое, нет сторонних демонов и лишних портов |
+| Модели только Apache-2.0/MIT, закреплённые SHA-256 в `models.json` | Можно свободно распространять в образе; Qwen2.5-3B под исследовательской лицензией не годится |
+| Дизайн-токены в `assets/tokens.py` | Единый источник цветов для Qt-приложений и генераторов графики; контраст проверяется (WCAG AA) |
 
 ## Структура
 
 ```
-config.env                  имя/версия/база/язык — единственное место для смены названия
+config.env                  имя/версия/база/язык, закреплённые версии llama.cpp и lazygit, AI_BUNDLE_MODEL
 build.sh                    all | system | iso | boot | clean
-packages/*.list             пакеты по группам (10-base, 20-desktop, 30-dev, 40-hardware, 90-live)
-scripts/chroot-setup.sh     всё, что делается внутри образа (репозитории, пакеты, overlay, os-release, службы, очистка)
-iso/grub.cfg, iso/theme/    меню загрузки live-USB (пункт «Установить» ставит параметр aisktagos.install)
+packages/*.list             пакеты по группам (10-base, 20-desktop, 30-dev, 35-ai, 40-hardware, 90-live)
+scripts/chroot-setup.sh     всё, что делается внутри образа (репозитории, пакеты, lazygit, ИИ-движок и модель, overlay, os-release, службы, очистка)
+iso/grub.cfg, iso/theme/    меню загрузки live-USB
 overlay/                    файлы поверх Ubuntu; копируются в / внутри chroot
-  etc/calamares/            установщик: settings.conf, modules/*.conf, branding/aisktagos/
-  etc/xdg/                  умолчания KDE (kdeglobals собирается в chroot из BreezeDark.colors + usr/share/aisktagos/kdeglobals.aisktagos)
-  etc/xdg/plasma-workspace/env/  aisktagos-render.sh (программная отрисовка без renderD*), aisktagos-live.sh (live: без блокировки/сна)
-  usr/share/plasma/look-and-feel/org.aisktagos.desktop/  раскладка: строка меню + док (layout.js)
-  usr/share/aurorae/themes/AIsktagOS/  тема окон «Frosted Glass» со «светофором» (генерируется assets/make-aurorae.py;
-                            элементы mask-* в decoration.svg включают размытие KWin под заголовком)
-  usr/share/plasma/desktoptheme/AIsktagOS/  стиль Plasma «AIsktagOS Glass»: стеклянные строка меню и док
-                            (генерируется assets/make-plasma-theme.py, остальное берётся из breeze-dark)
-  etc/calamares/branding/aisktagos/stylesheet.qss  оформление установщика (Calamares загружает его сам)
-  usr/lib/aisktagos/        aisktag-center.py (PyQt6: приветствие, драйверы, dev-инструменты), post-install.sh,
-                            display-fallback.sh (SDDM→X11 без DRM), live-session.sh, pre-apt-snapshot.sh
-  usr/bin/aisktag-*         запуск центра и установщика
-assets/                     генераторы графики (Pillow + rsvg-convert + шрифт Inter):
-                            make-assets.py [icons|wallpapers|grub|slides], make-aurorae.py, make-plasma-theme.py;
-                            grub и slides собираются без rsvg-convert (хоть на Windows)
-tools/test-vm.py            стенд QEMU: «железо» VMware, снимки экрана, клики, консоль ttyS0
-.github/workflows/build-iso.yml  сборка ISO (xz) и публикация в Releases (части по 1,9 ГБ, если больше 2 ГБ)
+  etc/aisktagos/ai.conf     настройки ИИ (модель, движок, контекст, потоки)
+  etc/calamares/            установщик: settings.conf, modules/*.conf, branding/aisktagos/ (stylesheet.qss, show.qml, branding.desc)
+  etc/xdg/                  умолчания KDE: kwinrc (кнопки справа, 4 стола), kglobalshortcutsrc (Meta+E/A/R, Ctrl+Alt+T…), kdeglobals собирается в chroot
+  etc/skel/                 zsh, kitty, starship, VS Code, git, ~/.continue (Mind), Desktop/*.desktop (значки на столе)
+  etc/sysctl.d, security/limits.d, systemd/{system,user}.conf.d   настройки под разработку
+  usr/bin/                  ai, aisktag-mind, aisktag-new, aisktag-doctor, aisktag-welcome/devsetup/drivers/install, ai-reel
+  usr/lib/aisktagos/        aisktag-center.py (Центр), aisktag-mind.py (окно ИИ), aisktag_ai.py (клиент), aisktag_theme.py (тема Qt из токенов),
+                            ai/{aisktag-llm-run, aisktag-llm-wait, aisktag-ai-model}, post-install.sh, display-fallback.sh, live-session.sh
+  usr/lib/systemd/system/   aisktag-llm.socket, aisktag-llm.service (прокси), aisktag-llm-backend.service (llama-server)
+  usr/share/aisktagos/      ai/models.json (каталог моделей), design/tokens.json (генерируется), zsh/aisktag-ai.zsh
+  usr/share/plasma/look-and-feel/org.aisktagos.desktop/   layout.js: панель задач Hybrid
+  usr/share/aurorae/themes/AIsktagOS/     тема окон (генерируется assets/make-aurorae.py)
+  usr/share/plasma/desktoptheme/AIsktagOS/ стиль панелей (генерируется assets/make-plasma-theme.py)
+  usr/share/polkit-1/actions/org.aisktagos.ai.policy
+assets/                     tokens.py (дизайн-токены, --check), make-assets.py [icons|wallpapers|grub|slides], make-aurorae.py, make-plasma-theme.py
+tools/                      test-vm.py (QEMU), vbox-vm.ps1, mock-llm.py (заглушка ИИ-сервера), shot-ui.py (снимки Qt-окон без сессии)
+docs/AI.md, docs/DESIGN.md  устройство ИИ и дизайн-система
+.github/workflows/build-iso.yml  lint (shellcheck, py_compile, токены) + сборка ISO и публикация в Releases (части по 1,9 ГБ)
 ```
 
 ## Как собрать и проверить
 
 ```bash
 sudo apt install debootstrap squashfs-tools xorriso grub-pc-bin grub-efi-amd64-bin mtools dosfstools qemu-system-x86 ovmf
-# быстрая тестовая сборка (zstd вместо xz, ~10 мин сжатия вместо ~80):
-sudo SQUASHFS_COMP=zstd ZSTD_LEVEL=3 WORK_DIR=/var/tmp/aisktagos-work OUT_DIR=/var/tmp/aisktagos-out ./build.sh all
-# только загрузчик и ISO, без пересжатия:
-sudo WORK_DIR=... OUT_DIR=... ./build.sh boot
+# быстрая тестовая сборка (zstd вместо xz, без модели):
+sudo AI_BUNDLE_MODEL=none SQUASHFS_COMP=zstd ZSTD_LEVEL=3 WORK_DIR=/var/tmp/aisktagos-work OUT_DIR=/var/tmp/aisktagos-out ./build.sh all
 ```
 
-Проверка в QEMU (`tools/test-vm.py`):
+Проверка в QEMU: `tools/test-vm.py` (команды start/shot/click/type/sh, режимы `bios|uefi|secureboot`, `VGA=std|vmware|virtio`).
 
-```bash
-qemu-img create -f qcow2 /var/tmp/aisktagos-vm/disk.qcow2 40G
-VGA=std python3 tools/test-vm.py start t1 uefi out/aisktagos-1.0-amd64.iso /var/tmp/aisktagos-vm/disk.qcow2
-python3 tools/test-vm.py shot t1 /tmp/s.png          # снимок экрана
-python3 tools/test-vm.py click t1 1000 734           # клик (экран 1280x800)
-python3 tools/test-vm.py type t1 Hello
-# с консолью: прямая загрузка ядра, вывод в /var/tmp/aisktagos-vm/<имя>.serial, ввод командой sh
-APPEND="boot=casper console=ttyS0,115200" VGA=std python3 tools/test-vm.py start dbg bios out/...iso
-python3 tools/test-vm.py sh dbg aisktag              # вход live-пользователем (без пароля)
-```
+**Проверка без ВМ (работает и на Windows):** `python3 tools/mock-llm.py 16573`, затем `python3 tools/shot-ui.py center|mind out.png` (Qt offscreen), `python3 assets/tokens.py --check`, `python3 -m py_compile …`, `node --check …layout.js`.
 
-Режимы: `bios`, `uefi`, `secureboot`. Переменная `VGA`: `std` (bochs), `vmware`, `virtio`.
+Перед коммитом (CLAUDE.md): `shellcheck -S warning build.sh scripts/*.sh overlay/usr/lib/aisktagos/*.sh overlay/usr/lib/aisktagos/ai/aisktag-llm-* overlay/usr/bin/aisktag-install` и `python3 -m py_compile overlay/usr/lib/aisktagos/*.py`.
 
-## Проверено (29.09.2026, QEMU без KVM)
+## Состояние проверки (честно)
 
-- BIOS и UEFI: меню GRUB с темой (1920×1080 в UEFI) через shim и подписанный GRUB;
-- live-сессия: Plasma на Wayland, строка меню, док, обои, значок «Установить AIsktagOS»;
-- пункт «Установить» сам открывает Calamares; шаги «Добро пожаловать», «Местоположение», «Клавиатура», «Разделы» («Стереть диск» → EFI 512 МБ + Btrfs), «Пользователи», «Сводка», «Установка» пройдены;
-- zsh + starship у пользователя, os-release/lsb-release/issue с названием AIsktagOS;
-- запасные режимы графики: X11 без DRM, программная отрисовка без render-узла.
+**Проверено (29.09–01.10.2026, QEMU/VirtualBox, версия 1.0):** BIOS/UEFI, GRUB, live-сессия Plasma, Calamares «Стереть диск» до «Установки», zsh+starship, запасные режимы графики.
 
-**Не проверено до конца:** завершение установки и первая загрузка установленной системы (под TCG распаковка шла ~1 час). Первым делом проверьте это в VMware или QEMU/KVM: вход в SDDM, Центр AIsktagOS при первом входе, Timeshift (`/etc/timeshift/timeshift.json`), раскладку us+ru на экране входа (установщик мог выставить только ru).
+**Версия 1.1 (05.10.2026) проверена только статически и на заглушке** (на машине разработки не было Linux/QEMU): синтаксис скриптов (`bash -n`, `py_compile`, `node --check`), контраст токенов, рендер окон Центра и Mind в Qt offscreen, генерация проектов `aisktag-new`, CLI `ai` против `mock-llm.py`, SVG темы окон и панели. **Не проверено на реальной системе — первым делом проверьте:**
 
-## Найденные и исправленные ловушки (не наступите снова)
+1. Сборка проходит целиком (особенно `install_ai`: URL llama.cpp/моделей, `ldd llama-server`, права `/opt/aisktagos/ai`).
+2. `systemctl status aisktag-llm.socket`; `ai вопрос` будит модель, ответ приходит; через 15 минут служба выгружается. Особенно: поведение `systemd-socket-proxyd` при долгой загрузке (клиент ждёт в очереди сокета?), `DynamicUser` + `SupplementaryGroups=render video`, `MemoryHigh=80%`.
+3. Выбор Vulkan на реальной видеокарте (`llama-server --list-devices` — формат строк `Vulkan0:` проверен только по документации).
+4. Раскладка Plasma 5.27: все виджеты (`pager`, `icontasks` launchers, `showdesktop`, `digitalclock` `BelowTime`), кнопки окна справа (`ButtonsOnRight=IAX` в kwinrc и в look-and-feel/defaults), 4 стола (`[Desktops] Number=4` без `Id_N` — KWin должен создать сам), значки на столе (нужен `chmod +x`, делает chroot-setup).
+5. Горячие клавиши из `kglobalshortcutsrc` (`[services][aisktag-mind.desktop]`, `Meta+E`, `Ctrl+Alt+T`) и kitty `shell_integration`, `allow_remote_control`, `Ctrl+Shift+E`.
+6. Завершение установки и первая загрузка установленной системы (с версии 1.0 остаётся открытым): SDDM, Центр при первом входе, Timeshift (`/etc/timeshift/timeshift.json`), раскладка us+ru на экране входа.
 
-1. `sudo -E` не работает: в 26.04 **sudo-rs** игнорирует `-E`. Переменные окружения нужно передавать явно (`sudo env WAYLAND_DISPLAY=… calamares`), см. `usr/bin/aisktag-install`.
+## Найденные ловушки (не наступите снова)
+
+1. `sudo -E` не работает в Ubuntu 26.04 (sudo-rs); на 24.04 работает, но `aisktag-install` передаёт переменные явно (`sudo env WAYLAND_DISPLAY=… calamares`).
 2. `/usr/lib/shim/shimx64.efi.signed` — ссылка на `/etc/alternatives`, с хоста битая. Брать `shimx64.efi.signed.latest`.
 3. Метка FAT для ESP — не длиннее 11 символов.
 4. Без `/dev/dri/renderD*` клиенты Qt Quick рисуют чёрные окна. Решение: `QT_QUICK_BACKEND=software`, `KWIN_COMPOSE=Q` в `plasma-workspace/env`.
-5. Эмуляция `-vga vmware` в QEMU неполная: vmwgfx отказывается и гасит sysfb. В настоящем VMware всё работает; для тестов в QEMU используйте `VGA=std`.
-6. VS Code в новых версиях — `com.microsoft.VSCode.desktop`, иконка `vscode`. Док выбирает приложения через `applicationExists()`.
+5. Эмуляция `-vga vmware` в QEMU неполная; для тестов в QEMU используйте `VGA=std`.
+6. VS Code в новых версиях — `com.microsoft.VSCode.desktop`, иконка `vscode`. Панель выбирает приложения через `applicationExists()`.
 7. Без `touch /etc/.updated /var/.updated` live-система при каждой загрузке запускает долгий `ldconfig.service`.
 8. У Kubuntu squashfs слоёный, у нас один слой: casper/calamares удаляет модуль `packages`, остатки live — `post-install.sh`.
-9. `Calamares` на Ubuntu ставит GRUB в `EFI/ubuntu` (так требует подписанный GRUB), поэтому `efiBootloaderId: "ubuntu"`.
-10. В песочнице без доступа к packages.mozilla.org вместо Firefox ставится Falkon. На GitHub Actions Firefox ставится нормально.
+9. Calamares на Ubuntu ставит GRUB в `EFI/ubuntu` (подписанный GRUB), поэтому `efiBootloaderId: "ubuntu"`.
+10. В песочнице без доступа к packages.mozilla.org вместо Firefox ставится Falkon.
+11. **Пакеты Ubuntu 24.04:** `lazygit` и `tokei` в noble нет (lazygit ставится из GitHub-релиза в chroot-setup). Любой отсутствующий пакет в `packages/*.list` валит всю сборку: проверяйте через Launchpad API (`getPublishedBinaries`, `distro_arch_series=…/noble/amd64`) до коммита.
+12. **llama.cpp:** релизы ggml-org публикуются почти ежедневно под тегами `bNNNNN`; последний «release» без бинарников (`v0.5.0` с `nightly-tag.txt`) — не путать. Сборка закреплена в `config.env` вместе с SHA-256 (digest берётся из GitHub API `assets[].digest`). Флаги `llama-server` сверены с `tools/server/README.md` тега `b11408`; при смене сборки перепроверьте (`--cache-ram`, `--alias`, `-c`, `-t`, `--list-devices`).
+13. **Windows при разработке:** в репозитории `.gitattributes` задаёт LF. Python на Windows пишет CRLF, если не указать `newline=''`. Скрипты, работающие с `\` и `\n` в heredoc, лучше править инструментом правки файлов, а не `python - <<EOF`.
+14. Размер ISO с моделью lite ≈ 3,5–4 ГБ: workflow режет на части по 1,9 ГБ. Для быстрой сборки `AI_BUNDLE_MODEL=none`.
+15. Модель — в `/usr/share/aisktagos/ai/models`, скачанные — в `/var/lib/aisktagos/ai/models`. Служба работает как `DynamicUser`, поэтому оба каталога должны быть читаемы всем (`chmod 644`/`755`).
 
 ## Что делать дальше (приоритеты)
 
-1. Довести до конца тест установки и первой загрузки (см. выше). Проверить `contextualprocess_efi_grub` (замена grub-pc на grub-efi-amd64 на UEFI) и `post-install.sh`.
-2. Опубликовать репозиторий на GitHub и запустить workflow. Размер ISO с xz ≈ 2,6–3 ГБ, поэтому будет разрезан на части по 1,9 ГБ (+ `join-windows.bat`). Если нужен один файл до 2 ГБ, уберите из образа `docker.io`, `clang`, `fonts-noto-cjk` или VS Code (его можно ставить из Центра).
-3. Слайд-шоу установщика: проверить, что слайды листаются (Timer в `show.qml`).
-4. Возможные улучшения: своя тема SDDM в стиле macOS, логотип-символ для строки меню, Latte-подобное увеличение значков в доке, интеграция с мультимодельной сетью пользователя (multillm-bridge) в Центре AIsktagOS.
+1. Выполнить проверки из раздела «Состояние проверки», исправить найденное. Начать со сборки на GitHub Actions и проверки ISO в VirtualBox/VMware.
+2. Живая индикация ИИ на панели (виджет Plasma с состоянием модели) и Dev HUD (загрузка CPU/RAM/температуры): нужен свой QML-плазмоид, в 5.27 `org.kde.ksysguard.sensors`.
+3. Своя тема SDDM и заставка загрузки в стиле Aurora (сейчас Breeze); светлая тема как вторая схема.
+4. Уникальные обои «Aurora» (процедурные ленты) и пересмотр меню GRUB: отдельные пункты «Попробовать» и «Установить».
+5. Контекстное меню Dolphin «Спросить Mind о файле», KRunner-плагин для `ai:`-запросов.

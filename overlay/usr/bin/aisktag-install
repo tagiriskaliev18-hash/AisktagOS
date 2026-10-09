@@ -1,11 +1,17 @@
 #!/usr/bin/env bash
 # Запуск установщика AIsktagOS (Calamares) с правами администратора.
-# В live-сессии sudo работает без пароля. sudo-rs в Ubuntu 26.04 не поддерживает «sudo -E»,
-# поэтому переменные, нужные для доступа к экрану (Wayland или X11), передаются явно.
+# В live-сессии sudo работает без пароля. Переменные, нужные для доступа к экрану (Wayland или X11),
+# передаются явно: «sudo -E» не везде поддерживается (например, sudo-rs в Ubuntu 26.04).
 if pgrep -x calamares >/dev/null; then
     exit 0
 fi
-if [ -n $WAYLAND_DISPLAY ] && [ -n $XDG_RUNTIME_DIR ]; then sudo chmod 0777 $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY 2>/dev/null || true; xhost +SI:localuser:root 2>/dev/null || true; fi$WAYLAND_DISPLAY ] && [ -n $XDG_RUNTIME_DIR ]; then sudo chmod 0777 $XDG_RUNTIME_DIR/$WAYLAND_DISPLAY || true; fi
+
+# Доступ root к экрану: сокет Wayland (live-сессия одноразовая, права можно открыть) и X11
+if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -n "${XDG_RUNTIME_DIR:-}" ]; then
+    sudo chmod 0777 "$XDG_RUNTIME_DIR/$WAYLAND_DISPLAY" 2>/dev/null || true
+fi
+xhost +SI:localuser:root 2>/dev/null || true
+
 exec sudo env \
     WAYLAND_DISPLAY="${WAYLAND_DISPLAY:-}" \
     DISPLAY="${DISPLAY:-}" \
