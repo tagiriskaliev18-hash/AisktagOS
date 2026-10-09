@@ -41,7 +41,7 @@ overlay/                    файлы поверх Ubuntu; копируются
   etc/xdg/                  умолчания KDE: kwinrc (кнопки справа, 4 стола), kglobalshortcutsrc (Meta+E/A/R, Ctrl+Alt+T…), kdeglobals собирается в chroot
   etc/skel/                 zsh, kitty, starship, VS Code, git, ~/.continue (Mind), Desktop/*.desktop (значки на столе)
   etc/sysctl.d, security/limits.d, systemd/{system,user}.conf.d   настройки под разработку
-  usr/bin/                  ai, aisktag-mind, aisktag-new, aisktag-doctor, aisktag-welcome/devsetup/drivers/install
+  usr/bin/                  ai, aisktag-mind, aisktag-new, aisktag-doctor, aisktag-welcome/devsetup/drivers/install, ai-reel
   usr/lib/aisktagos/        aisktag-center.py (Центр), aisktag-mind.py (окно ИИ), aisktag_ai.py (клиент), aisktag_theme.py (тема Qt из токенов),
                             ai/{aisktag-llm-run, aisktag-llm-wait, aisktag-ai-model}, post-install.sh, display-fallback.sh, live-session.sh
   usr/lib/systemd/system/   aisktag-llm.socket, aisktag-llm.service (прокси), aisktag-llm-backend.service (llama-server)
