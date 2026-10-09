@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Центр AIsktagOS: приветствие, драйверы видеокарты, инструменты разработчика и сведения о системе.
 
-    aisktag-welcome [--page welcome|drivers|dev|system] [--autostart]
+    aisktag-welcome [--page welcome|drivers|dev|ecosystem|system] [--autostart]
 """
 import os
 import platform
@@ -13,10 +13,18 @@ from pathlib import Path
 
 from PyQt6.QtCore import QEasingCurve, QProcess, QPropertyAnimation, QSize, Qt
 from PyQt6.QtGui import QIcon, QPixmap
-from PyQt6.QtWidgets import (QApplication, QCheckBox, QFrame, QGraphicsOpacityEffect, QGridLayout,
-                             QHBoxLayout, QLabel, QListWidget, QListWidgetItem, QMessageBox,
-                             QPlainTextEdit, QPushButton, QScrollArea, QStackedWidget, QVBoxLayout,
-                             QWidget)
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QFrame, QGraphicsOpacityEffect,
+                             QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
+                             QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
+                             QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
+
+try:
+    # MindKit — общие службы экосистемы MindTagSystem (/usr/lib/python3/dist-packages/mindkit)
+    from mindkit import keychain as mk_keychain
+    from mindkit import link as mk_link
+    from mindkit import store as mk_store
+except ImportError:
+    mk_keychain = mk_link = mk_store = None
 
 DONE_FLAG = Path.home() / ".config/aisktagos/welcome-done"
 LIVE = "boot=casper" in Path("/proc/cmdline").read_text()
@@ -296,7 +304,7 @@ class WelcomePage(QWidget):
         keys_lay.addWidget(heading("Горячие клавиши", "h2"))
         keys = QLabel(
             "<table cellspacing=6>"
-            "<tr><td><b>Meta+Space</b></td><td>Поиск приложений, файлов, калькулятор (как Spotlight)</td></tr>"
+            "<tr><td><b>Meta+Space</b></td><td>Поиск приложений, файлов, калькулятор и Mind Search (как Spotlight)</td></tr>"
             "<tr><td><b>Meta+W</b> / угол слева снизу</td><td>Обзор всех окон (как Mission Control)</td></tr>"
             "<tr><td><b>Alt+Shift</b></td><td>Сменить раскладку клавиатуры</td></tr>"
             "<tr><td><b>Meta+←/→</b></td><td>Окно на половину экрана</td></tr>"
@@ -432,6 +440,174 @@ class DevPage(QWidget):
             cb.setChecked(False)
 
 
+class EcosystemPage(QWidget):
+    """MindTagSystem: устройства (MindLink), связка ключей и Mind Store в одном месте."""
+
+    def __init__(self, runner: Runner):
+        super().__init__()
+        self.runner = runner
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        box = QWidget()
+        lay = QVBoxLayout(box)
+        lay.setContentsMargins(0, 0, 6, 0)
+        lay.addWidget(heading("Экосистема MindTagSystem"))
+        lay.addWidget(muted(
+            "Ваши устройства работают вместе, как у Apple: общий буфер обмена, Handoff, MindDrop, "
+            "одна связка ключей для всех программ и каталог приложений экосистемы."))
+        if mk_link is None:
+            lay.addWidget(muted("MindKit не установлен. Поставьте его: "
+                                "<b>pip install git+https://github.com/tagiriskaliev18-hash/MindTagSystem</b>"))
+            lay.addStretch(1)
+            outer.addWidget(box)
+            return
+
+        # MindLink
+        c, cl = card()
+        cl.addWidget(heading("Мои устройства (MindLink)", "h2"))
+        self.link_state = muted("")
+        cl.addWidget(self.link_state)
+        row = QHBoxLayout()
+        self.b_init = QPushButton("Создать аккаунт", objectName="primary")
+        self.b_init.clicked.connect(self._init)
+        self.b_join = QPushButton("Войти по ключу")
+        self.b_join.clicked.connect(self._join)
+        b_scan = QPushButton("Найти устройства")
+        b_scan.clicked.connect(self._scan)
+        b_drop = QPushButton("MindDrop: отправить файл…")
+        b_drop.clicked.connect(self._drop)
+        for b in (self.b_init, self.b_join, b_scan, b_drop):
+            row.addWidget(b)
+        row.addStretch(1)
+        cl.addLayout(row)
+        lay.addWidget(c)
+
+        # Связка ключей
+        c, cl = card()
+        cl.addWidget(heading("Связка ключей Mind", "h2"))
+        cl.addWidget(muted("Ключи API хранятся в KWallet и доступны Mind IDE, шлюзу AI Duo, ITIS Browser "
+                           "и остальным программам экосистемы. Ввести ключ нужно один раз."))
+        self.keys = QLabel()
+        self.keys.setTextFormat(Qt.TextFormat.RichText)
+        cl.addWidget(self.keys)
+        row = QHBoxLayout()
+        b_add = QPushButton("Добавить ключ")
+        b_add.clicked.connect(self._add_key)
+        b_imp = QPushButton("Импорт из .env…")
+        b_imp.clicked.connect(self._import_env)
+        row.addWidget(b_add)
+        row.addWidget(b_imp)
+        row.addStretch(1)
+        cl.addLayout(row)
+        lay.addWidget(c)
+
+        # Mind Store
+        c, cl = card()
+        cl.addWidget(heading("Mind Store", "h2"))
+        cl.addWidget(muted("Приложения экосистемы ставятся из GitHub в папку ~/MindTagSystem."))
+        grid = QGridLayout()
+        try:
+            apps = mk_store.apps()
+        except mk_store.StoreError as e:
+            apps = []
+            cl.addWidget(muted(str(e)))
+        for i, app in enumerate(a for a in apps if a["installable"]):
+            text = ("✓ " if app["installed"] else "") + app["name"]
+            tagline = app["tagline"] if len(app["tagline"]) <= 40 else app["tagline"][:39].rstrip() + "…"
+            b = tile(text, tagline, "system-software-install", lambda _=False, a=app: self._store(a))
+            # Длинный текст плитки не должен раздвигать страницу шире окна
+            b.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
+            grid.addWidget(b, i // 2, i % 2)
+        cl.addLayout(grid)
+        lay.addWidget(c)
+        lay.addStretch(1)
+
+        scroll = QScrollArea(widgetResizable=True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setWidget(box)
+        outer.addWidget(scroll)
+        self._refresh()
+
+    def _refresh(self) -> None:
+        st = mk_link.status()
+        has = st["account"]
+        names = ", ".join(p["name"] for p in st["peers"].values()) or "пока нет"
+        enc = "шифрование AES-GCM" if st["encryption"] else "без шифрования"
+        self.link_state.setText(
+            f"Это устройство: <b>{st['device']['name']}</b>. " +
+            (f"Аккаунт настроен, {enc}. Устройства рядом: <b>{names}</b>." if has else
+             "Аккаунт не настроен: создайте его на первом устройстве и войдите по ключу на остальных."))
+        self.b_init.setText("Показать ключ" if has else "Создать аккаунт")
+        self.b_join.setVisible(not has)
+        names = [n for n in mk_keychain.names() if n != mk_link.ACCOUNT_KEY_NAME]
+        self.keys.setText("<br>".join(f"🔑 {n}" for n in names) if names else "Ключей пока нет.")
+
+    def _init(self) -> None:
+        key = mk_link.init_account()
+        subprocess.run(["systemctl", "--user", "restart", "mindlink.service"], check=False)
+        QApplication.clipboard().setText(key)
+        QMessageBox.information(self, "MindLink", "Ключ аккаунта скопирован в буфер обмена. "
+                                "Введите его на других своих устройствах («Войти по ключу» или "
+                                f"mindkit link join):\n\n{key}\n\nХраните его как пароль.")
+        self._refresh()
+
+    def _join(self) -> None:
+        key, ok = QInputDialog.getText(self, "MindLink", "Ключ аккаунта с другого устройства:")
+        if not ok or not key.strip():
+            return
+        try:
+            mk_link.join_account(key)
+        except ValueError as e:
+            QMessageBox.warning(self, "MindLink", f"Ключ не подходит: {e}")
+            return
+        subprocess.run(["systemctl", "--user", "restart", "mindlink.service"], check=False)
+        self._scan()
+
+    def _scan(self) -> None:
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            mk_link.discover(timeout=2.0)
+        finally:
+            QApplication.restoreOverrideCursor()
+        self._refresh()
+
+    def _drop(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "MindDrop: файл для своих устройств")
+        if not path:
+            return
+        try:
+            res = mk_link.drop(path)
+        except mk_link.LinkError as e:
+            QMessageBox.warning(self, "MindDrop", str(e))
+            return
+        lines = [f"{'✓' if v == 'ok' else '✗'} {k}" + ("" if v == "ok" else f": {v}") for k, v in res.items()]
+        QMessageBox.information(self, "MindDrop", "\n".join(lines) or "Нет известных устройств")
+
+    def _add_key(self) -> None:
+        name, ok = QInputDialog.getText(self, "Связка ключей", "Имя ключа, например GROQ_API_KEY:")
+        if not ok or not name.strip():
+            return
+        value, ok = QInputDialog.getText(self, "Связка ключей", f"Значение {name.strip()}:",
+                                         QLineEdit.EchoMode.Password)
+        if ok and value:
+            try:
+                mk_keychain.set(name.strip(), value)
+            except ValueError as e:
+                QMessageBox.warning(self, "Связка ключей", str(e))
+            self._refresh()
+
+    def _import_env(self) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, "Файл .env с ключами", str(Path.home()))
+        if path:
+            self.runner.run("Импорт ключей", "user", f"mindkit keychain import '{path}'")
+            self.runner.on_idle = self._refresh
+
+    def _store(self, app: dict) -> None:
+        act = "run" if app["installed"] else "install"
+        self.runner.run(f"Mind Store: {app['name']}", "user", f"mindkit store {act} {app['id']}")
+
+
 class SystemPage(QWidget):
     def __init__(self):
         super().__init__()
@@ -507,7 +683,7 @@ class SystemPage(QWidget):
 
 
 class Center(QWidget):
-    PAGES = ["welcome", "drivers", "dev", "system"]
+    PAGES = ["welcome", "drivers", "dev", "ecosystem", "system"]
 
     def __init__(self, page: str):
         super().__init__()
@@ -523,10 +699,12 @@ class Center(QWidget):
         nav.setFixedWidth(210)
         nav.setIconSize(QSize(22, 22))
         for text, icon in (("Добро пожаловать", "aisktagos-logo"), ("Драйверы", "video-display"),
-                           ("Разработка", "applications-development"), ("Система", "computer")):
+                           ("Разработка", "applications-development"), ("Экосистема", "network-workgroup"),
+                           ("Система", "computer")):
             nav.addItem(QListWidgetItem(QIcon.fromTheme(icon), text))
         self.stack = QStackedWidget()
-        for w in (WelcomePage(), DriversPage(self.runner), DevPage(self.runner), SystemPage()):
+        for w in (WelcomePage(), DriversPage(self.runner), DevPage(self.runner), EcosystemPage(self.runner),
+                  SystemPage()):
             self.stack.addWidget(w)
         # Плавное появление страницы при переключении
         self.fade = QGraphicsOpacityEffect(self.stack)

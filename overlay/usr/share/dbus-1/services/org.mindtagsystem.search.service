@@ -1,0 +1,3 @@
+[D-BUS Service]
+Name=org.mindtagsystem.search
+Exec=/usr/bin/python3 /usr/lib/aisktagos/mindkit-krunner.py

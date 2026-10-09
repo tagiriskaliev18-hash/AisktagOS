@@ -1,0 +1,3 @@
+#!/bin/sh
+# MindKit — общие службы экосистемы MindTagSystem (связка ключей, MindLink, поиск, быстрые команды, Mind Store)
+exec /usr/bin/python3 -m mindkit "$@"

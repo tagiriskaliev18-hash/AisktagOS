@@ -183,6 +183,8 @@ sed -i 's|^#\?SHELL=.*|SHELL=/usr/bin/zsh|' /etc/default/useradd
 
 # --- Службы -------------------------------------------------------------------
 systemctl enable NetworkManager sddm aisktagos-flathub.service
+# MindLink (экосистема MindTagSystem): служба каждого пользователя, ждёт входа устройства в аккаунт
+systemctl --global enable mindlink.service
 systemctl set-default graphical.target
 # Сетью управляет NetworkManager; ожидание systemd-networkd (если его притянул netplan)
 # только задерживает загрузку до 2 минут «A start job is running for Wait for Network…»
@@ -190,6 +192,11 @@ systemctl mask systemd-networkd-wait-online.service || true
 # Docker запускается по первому обращению — не тормозит загрузку
 systemctl disable docker.service || true
 systemctl enable docker.socket || true
+# MindLink принимает соединения только из локальной сети. Правила добавляются, пока ufw
+# выключен в конфиге: тогда он лишь пишет user.rules и не трогает iptables хоста
+for net in 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16; do
+    ufw allow from "$net" to any app MindLink || true
+done
 sed -i 's/^ENABLED=.*/ENABLED=yes/' /etc/ufw/ufw.conf
 
 # Flathub (при сборке без сети — добавится при первом запуске службой aisktagos-flathub)
