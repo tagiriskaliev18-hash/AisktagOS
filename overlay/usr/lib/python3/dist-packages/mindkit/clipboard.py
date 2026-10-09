@@ -21,7 +21,10 @@ def _commands() -> tuple[list[str], list[str]] | None:
         return None
     if IS_WINDOWS:
         ps = ["powershell", "-NoProfile", "-Command"]
-        return ps + ["Get-Clipboard -Raw"], ps + ["$input | Set-Clipboard"]
+        # UTF-8 в обе стороны, иначе PowerShell портит кириллицу кодировкой консоли
+        return (ps + ["[Console]::OutputEncoding=[Text.Encoding]::UTF8; Get-Clipboard -Raw"],
+                ps + ["[Console]::InputEncoding=[Text.Encoding]::UTF8; "
+                      "Set-Clipboard -Value ([Console]::In.ReadToEnd())"])
     if IS_MAC:
         return ["pbpaste"], ["pbcopy"]
     if os.environ.get("WAYLAND_DISPLAY") and shutil.which("wl-paste") and shutil.which("wl-copy"):
