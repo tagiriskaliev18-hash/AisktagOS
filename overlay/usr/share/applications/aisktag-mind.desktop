@@ -1,20 +1,27 @@
 [Desktop Entry]
+Version=1.1
 Type=Application
-Name=Mind — ИИ-ассистент
-Name[en]=Mind — AI assistant
-GenericName=Встроенный ИИ
-GenericName[en]=Built-in AI
-Comment=Локальная нейросеть: вопросы, код, ошибки, команды. Работает без интернета
-Comment[en]=Local AI: questions, code, errors, commands. Works offline
+Name=Mind
+Name[ru]=Mind — ИИ-ассистент
+GenericName=AI Assistant
+GenericName[ru]=ИИ-ассистент
+Comment=Встроенный ИИ-ассистент AIsktagOS: чат, код, объяснения
+Comment[ru]=Встроенный ИИ-ассистент AIsktagOS: чат, код, объяснения
 Exec=aisktag-mind
 Icon=aisktagos-mind
 Terminal=false
-Categories=Qt;KDE;Utility;Development;
-Keywords=ai;ии;нейросеть;ассистент;llm;mind;чат;chatgpt;copilot;
+StartupNotify=true
 StartupWMClass=aisktag-mind
-Actions=Clipboard;
+Categories=Development;Education;Utility;
+Keywords=ИИ;AI;чат;код;ассистент;mind;
+Actions=NewChat;AskFromClipboard;
 
-[Desktop Action Clipboard]
-Name=Спросить о тексте из буфера обмена
-Name[en]=Ask about clipboard text
+[Desktop Action NewChat]
+Name=Новый чат
+Name[ru]=Новый чат
+Exec=aisktag-mind --new
+
+[Desktop Action AskFromClipboard]
+Name=Спросить из буфера обмена
+Name[ru]=Спросить из буфера обмена
 Exec=aisktag-mind --clipboard
