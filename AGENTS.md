@@ -42,6 +42,11 @@ overlay/                    файлы поверх Ubuntu; копируются
   usr/share/plasma/desktoptheme/AIsktagOS/  стиль Plasma «AIsktagOS Glass»: стеклянные строка меню и док
                             (генерируется assets/make-plasma-theme.py, остальное берётся из breeze-dark)
   etc/calamares/branding/aisktagos/stylesheet.qss  оформление установщика (Calamares загружает его сам)
+  usr/share/aisktagos/mind-icons/  свои иконки в стиле Mind, которых нет в MindKit (gpu, history); остальные
+                            Центр берёт из mindkit (qtfx.icon). Единый стиль Mind (правило экосистемы): никаких
+                            эмодзи в интерфейсе, фиолетово-синий градиент #a46cf0→#7c66df→#5b8dee→#49b3f7 с переливом,
+                            3D-кнопки и пружина (см. docs/DESIGN.md в MindTagSystem); копия иконок для слайд-шоу —
+                            etc/calamares/branding/aisktagos/icons/
   usr/lib/aisktagos/        aisktag-center.py (PyQt6: приветствие, драйверы, dev-инструменты), post-install.sh,
                             display-fallback.sh (SDDM→X11 без DRM), live-session.sh, pre-apt-snapshot.sh
   usr/bin/aisktag-*         запуск центра и установщика

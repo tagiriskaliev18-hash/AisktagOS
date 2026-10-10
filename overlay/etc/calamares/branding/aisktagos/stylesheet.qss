@@ -1,5 +1,5 @@
 /*
- * AIsktagOS — оформление установщика Calamares «Cyber-Cyan / Neon-Blue».
+ * AIsktagOS — оформление установщика Calamares в едином стиле Mind (фиолетово-синий градиент).
  * Calamares сам подхватывает stylesheet.qss из папки брендинга.
  * Имена (#view-button-next и т. п.) взяты из исходников Calamares (CalamaresWindow.cpp).
  * Список шагов слева рисуется кодом Calamares, его цвета задаются в branding.desc (style:).
@@ -8,7 +8,7 @@
 
 /* ---- Основа ---------------------------------------------------------------- */
 #mainApp {
-    background-color: #0a0f1e;
+    background-color: #0b0a1c;
 }
 #mainApp QWidget {
     font-family: "Inter";
@@ -16,7 +16,7 @@
     color: #e6ecff;
 }
 #sidebarApp {
-    border-right: 1px solid rgba(120, 200, 255, 0.14);
+    border-right: 1px solid rgba(164, 108, 240, 0.14);
 }
 #sidebarApp QTreeView {
     background: transparent;
@@ -26,38 +26,42 @@
 
 /* ---- Навигация: Далее / Назад / Отмена ----------------------------------- */
 #view-button-next {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1fb8ff, stop:1 #3d6bff);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #a46cf0, stop:0.33 #7c66df, stop:0.67 #5b8dee, stop:1 #49b3f7);
     color: #ffffff;
     font-weight: 600;
-    border: 1px solid rgba(34, 228, 255, 0.45);
+    border: 0;
+    /* 3D-вставка: блик сверху, тень снизу (как .mt-btn в mind-ui.css) */
+    border-top: 1px solid rgba(255, 255, 255, 0.38);
+    border-bottom: 2px solid rgba(20, 10, 60, 0.55);
     border-radius: 10px;
     padding: 9px 22px;
     min-width: 110px;
 }
 #view-button-next:hover {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4fd0ff, stop:1 #5a85ff);
-    border: 1px solid rgba(34, 228, 255, 0.9);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #b483f5, stop:0.5 #6f9cf3, stop:1 #5cc4ff);
 }
 #view-button-next:pressed {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1590cc, stop:1 #2d55cc);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #7f45c7, stop:0.5 #4a76d0, stop:1 #2f8fd0);
+    border-top: 2px solid rgba(20, 10, 60, 0.55);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
 }
 #view-button-next:disabled {
-    background: #1c2540;
-    color: #5b6585;
-    border: 1px solid rgba(120, 200, 255, 0.12);
+    background: #1e1c3a;
+    color: #5f5c85;
+    border: 1px solid rgba(164, 108, 240, 0.12);
 }
 
 #view-button-back, #view-button-cancel {
     background-color: rgba(255, 255, 255, 0.04);
     color: #e6ecff;
-    border: 1px solid rgba(120, 200, 255, 0.22);
+    border: 1px solid rgba(164, 108, 240, 0.22);
     border-radius: 10px;
     padding: 9px 22px;
     min-width: 110px;
 }
 #view-button-back:hover {
-    background-color: rgba(34, 228, 255, 0.08);
-    border: 1px solid #22e4ff;
+    background-color: rgba(164, 108, 240, 0.08);
+    border: 1px solid #a46cf0;
     color: #ffffff;
 }
 #view-button-cancel:hover {
@@ -69,99 +73,99 @@
     background-color: rgba(255, 255, 255, 0.02);
 }
 #view-button-back:disabled, #view-button-cancel:disabled {
-    color: #5b6585;
-    border: 1px solid rgba(120, 200, 255, 0.10);
+    color: #5f5c85;
+    border: 1px solid rgba(164, 108, 240, 0.10);
 }
 
 /* ---- Прочие кнопки ---------------------------------------------------------- */
 QPushButton {
-    background-color: #16203a;
+    background-color: #1d1b40;
     color: #e6ecff;
-    border: 1px solid rgba(120, 200, 255, 0.22);
+    border: 1px solid rgba(164, 108, 240, 0.22);
     border-radius: 8px;
     padding: 6px 14px;
 }
 QPushButton:hover {
-    border: 1px solid #22e4ff;
+    border: 1px solid #a46cf0;
     color: #ffffff;
 }
 QPushButton:pressed {
-    background-color: #101a30;
+    background-color: #12112c;
 }
 QPushButton:checked {
-    background-color: rgba(61, 123, 255, 0.28);
-    border: 1px solid #3d7bff;
+    background-color: rgba(124, 102, 223, 0.28);
+    border: 1px solid #5b8dee;
 }
 QPushButton:disabled {
-    background-color: #151c32;
-    color: #5b6585;
-    border: 1px solid rgba(120, 200, 255, 0.10);
+    background-color: #1a1838;
+    color: #5f5c85;
+    border: 1px solid rgba(164, 108, 240, 0.10);
 }
 #aboutButton, #debugButton {
     background: transparent;
     border: none;
-    color: #8b95b8;
+    color: #9693bd;
     padding: 6px 10px;
 }
 #aboutButton:hover, #debugButton:hover, #aboutButton:checked, #debugButton:checked {
     background: transparent;
-    color: #22e4ff;
+    color: #a46cf0;
 }
 
 /* ---- Поля ввода и списки -------------------------------------------------- */
 QLineEdit, QComboBox, QSpinBox, QTextEdit, QPlainTextEdit, QTextBrowser {
-    background-color: #121a2e;
+    background-color: #141330;
     color: #e6ecff;
-    border: 1px solid rgba(120, 200, 255, 0.18);
+    border: 1px solid rgba(164, 108, 240, 0.18);
     border-radius: 8px;
     padding: 6px;
-    selection-background-color: rgba(61, 123, 255, 0.45);
+    selection-background-color: rgba(124, 102, 223, 0.45);
     selection-color: #ffffff;
 }
 QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QTextEdit:focus, QPlainTextEdit:focus {
-    border: 1px solid #22e4ff;
+    border: 1px solid #a46cf0;
 }
 QLineEdit:disabled, QComboBox:disabled, QSpinBox:disabled {
-    color: #5b6585;
-    border: 1px solid rgba(120, 200, 255, 0.08);
+    color: #5f5c85;
+    border: 1px solid rgba(164, 108, 240, 0.08);
 }
 QComboBox QAbstractItemView {
-    background-color: #121a2e;
+    background-color: #141330;
     color: #e6ecff;
-    border: 1px solid #22e4ff;
+    border: 1px solid #a46cf0;
     outline: none;
-    selection-background-color: rgba(61, 123, 255, 0.45);
+    selection-background-color: rgba(124, 102, 223, 0.45);
     selection-color: #ffffff;
 }
 
 QListView, QTreeView, QTableView {
-    background-color: #121a2e;
+    background-color: #141330;
     color: #e6ecff;
-    border: 1px solid rgba(120, 200, 255, 0.18);
+    border: 1px solid rgba(164, 108, 240, 0.18);
     border-radius: 8px;
     padding: 4px;
     outline: none;
 }
 QListView:focus, QTreeView:focus, QTableView:focus {
-    border: 1px solid rgba(34, 228, 255, 0.7);
+    border: 1px solid rgba(164, 108, 240, 0.7);
 }
 QListView::item, QTreeView::item {
     padding: 6px;
     border-radius: 6px;
 }
 QListView::item:hover, QTreeView::item:hover, QTableView::item:hover {
-    background-color: rgba(34, 228, 255, 0.08);
+    background-color: rgba(164, 108, 240, 0.08);
 }
 QListView::item:selected, QTreeView::item:selected, QTableView::item:selected {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                                stop:0 rgba(31, 184, 255, 0.38), stop:1 rgba(61, 107, 255, 0.38));
+                                stop:0 rgba(164, 108, 240, 0.38), stop:1 rgba(91, 141, 238, 0.38));
     color: #ffffff;
 }
 QHeaderView::section {
-    background-color: #16203a;
-    color: #8b95b8;
+    background-color: #1d1b40;
+    color: #9693bd;
     border: none;
-    border-bottom: 1px solid rgba(120, 200, 255, 0.18);
+    border-bottom: 1px solid rgba(164, 108, 240, 0.18);
     padding: 6px;
 }
 
@@ -169,8 +173,8 @@ QHeaderView::section {
 QCheckBox::indicator, QRadioButton::indicator {
     width: 16px;
     height: 16px;
-    border: 1px solid rgba(120, 200, 255, 0.35);
-    background-color: #121a2e;
+    border: 1px solid rgba(164, 108, 240, 0.35);
+    background-color: #141330;
 }
 QCheckBox::indicator {
     border-radius: 4px;
@@ -179,23 +183,23 @@ QRadioButton::indicator {
     border-radius: 9px;
 }
 QCheckBox::indicator:hover, QRadioButton::indicator:hover {
-    border: 1px solid #22e4ff;
+    border: 1px solid #a46cf0;
 }
 /* Отмеченное состояние: циановая сердцевина внутри тёмной рамки */
 QCheckBox::indicator:checked {
     background-color: qradialgradient(cx:0.5, cy:0.5, radius:0.6, fx:0.5, fy:0.5,
-                                      stop:0 #22e4ff, stop:0.62 #22e4ff, stop:0.7 #121a2e);
-    border: 1px solid #22e4ff;
+                                      stop:0 #a46cf0, stop:0.62 #a46cf0, stop:0.7 #141330);
+    border: 1px solid #a46cf0;
 }
 QRadioButton::indicator:checked {
     background-color: qradialgradient(cx:0.5, cy:0.5, radius:0.5, fx:0.5, fy:0.5,
-                                      stop:0 #22e4ff, stop:0.5 #22e4ff, stop:0.6 #121a2e);
-    border: 1px solid #22e4ff;
+                                      stop:0 #a46cf0, stop:0.5 #a46cf0, stop:0.6 #141330);
+    border: 1px solid #a46cf0;
 }
 
 /* ---- Ход установки ------------------------------------------------------------ */
 QProgressBar {
-    background-color: #121a2e;
+    background-color: #141330;
     border: none;
     border-radius: 5px;
     max-height: 10px;
@@ -204,7 +208,7 @@ QProgressBar {
     color: transparent;
 }
 QProgressBar::chunk {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #22e4ff, stop:1 #3d7bff);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #a46cf0, stop:1 #5b8dee);
     border-radius: 5px;
 }
 
@@ -220,7 +224,7 @@ QScrollBar::handle:vertical {
     min-height: 30px;
 }
 QScrollBar::handle:vertical:hover {
-    background-color: rgba(34, 228, 255, 0.6);
+    background-color: rgba(164, 108, 240, 0.6);
 }
 QScrollBar:horizontal {
     background: transparent;
@@ -233,7 +237,7 @@ QScrollBar::handle:horizontal {
     min-width: 30px;
 }
 QScrollBar::handle:horizontal:hover {
-    background-color: rgba(34, 228, 255, 0.6);
+    background-color: rgba(164, 108, 240, 0.6);
 }
 QScrollBar::add-line, QScrollBar::sub-line {
     width: 0;
@@ -244,15 +248,15 @@ QScrollBar::add-page, QScrollBar::sub-page {
 }
 
 QToolTip {
-    background-color: #121a2e;
+    background-color: #141330;
     color: #e6ecff;
-    border: 1px solid #22e4ff;
+    border: 1px solid #a46cf0;
     border-radius: 6px;
     padding: 6px;
 }
 
 QGroupBox {
-    border: 1px solid rgba(120, 200, 255, 0.16);
+    border: 1px solid rgba(164, 108, 240, 0.16);
     border-radius: 10px;
     margin-top: 14px;
     padding: 10px;
@@ -262,12 +266,12 @@ QGroupBox::title {
     subcontrol-position: top left;
     left: 12px;
     padding: 0 4px;
-    color: #22e4ff;
+    color: #a46cf0;
 }
 
 QTabBar::tab {
     background: transparent;
-    color: #8b95b8;
+    color: #9693bd;
     padding: 8px 16px;
     border: none;
     border-bottom: 2px solid transparent;
@@ -277,5 +281,5 @@ QTabBar::tab:hover {
 }
 QTabBar::tab:selected {
     color: #ffffff;
-    border-bottom: 2px solid #22e4ff;
+    border-bottom: 2px solid #a46cf0;
 }

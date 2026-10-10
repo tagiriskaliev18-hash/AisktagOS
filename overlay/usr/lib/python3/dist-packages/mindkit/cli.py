@@ -291,8 +291,20 @@ def cmd_store(a) -> int:
 
 
 def cmd_design(a) -> int:
-    print(design.css() if a.format == "css" else design.qss() if a.format == "qss"
-          else json.dumps(design.tokens(), ensure_ascii=False, indent=2), end="")
+    if a.format == "build":
+        files = design.build(a.arg or "mind-ui")
+        print(f"Готово: {len(files)} файлов в {files[0].parent}")
+        return 0
+    if a.format == "icon":
+        if a.arg not in design.icons():
+            print("Нет такой иконки. Есть:", " ".join(design.icons()), file=sys.stderr)
+            return 1
+        print(design.icon_svg(a.arg))
+        return 0
+    out = {"css": design.css, "qss": design.qss, "js": design.js, "sprite": design.sprite,
+           "icons": lambda: "\n".join(design.icons()) + "\n",
+           "json": lambda: json.dumps(design.tokens(), ensure_ascii=False, indent=2)}[a.format]()
+    print(out, end="")
     return 0
 
 
@@ -417,8 +429,9 @@ def build_parser() -> argparse.ArgumentParser:
     sts.add_parser("update").add_argument("--dry-run", action="store_true")
     st.set_defaults(fn=cmd_store)
 
-    s = sub.add_parser("design", help="дизайн Aurora для своих интерфейсов")
-    s.add_argument("format", choices=["css", "qss", "json"])
+    s = sub.add_parser("design", help="дизайн Aurora: градиент Mind, 3D, bounce и иконки Mind")
+    s.add_argument("format", choices=["css", "qss", "js", "json", "sprite", "icons", "icon", "build"])
+    s.add_argument("arg", nargs="?", help="имя иконки (icon) или папка (build)")
     s.set_defaults(fn=cmd_design)
     return p
 

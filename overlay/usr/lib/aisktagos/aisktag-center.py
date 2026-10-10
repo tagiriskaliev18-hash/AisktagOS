@@ -11,9 +11,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PyQt6.QtCore import QEasingCurve, QProcess, QPropertyAnimation, QSize, Qt
-from PyQt6.QtGui import QIcon, QPixmap
-from PyQt6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QFrame, QGraphicsOpacityEffect,
+from PyQt6.QtCore import (QByteArray, QEasingCurve, QPoint, QProcess, QPropertyAnimation, QSize, Qt,
+                          QVariantAnimation)
+from PyQt6.QtGui import QBrush, QColor, QIcon, QLinearGradient, QPainter, QPen, QPixmap
+from PyQt6.QtSvg import QSvgRenderer
+from PyQt6.QtWidgets import (QApplication, QCheckBox, QFileDialog, QFrame, QGraphicsDropShadowEffect,
                              QGridLayout, QHBoxLayout, QInputDialog, QLabel, QLineEdit, QListWidget,
                              QListWidgetItem, QMessageBox, QPlainTextEdit, QPushButton, QScrollArea,
                              QSizePolicy, QStackedWidget, QVBoxLayout, QWidget)
@@ -25,64 +27,101 @@ try:
     from mindkit import store as mk_store
 except ImportError:
     mk_keychain = mk_link = mk_store = None
+try:
+    # Единый стиль Mind: иконки с градиентом, пружина и перелив (mindkit/qtfx.py)
+    from mindkit import qtfx
+except ImportError:
+    qtfx = None
 
 DONE_FLAG = Path.home() / ".config/aisktagos/welcome-done"
 LIVE = "boot=casper" in Path("/proc/cmdline").read_text()
 LOGO = "/usr/share/aisktagos/logo.png"
 
-# Палитра «Cyber-Cyan / Neon-Blue» — та же, что у установщика и темы окон
-CYAN = "#22e4ff"
+# Свои иконки в стиле Mind, которых нет в MindKit (история снимков, видеокарта)
+# /usr/lib/aisktagos/… → /usr/share/aisktagos/mind-icons (так же работает и из overlay при отладке)
+MIND_ICONS = Path(__file__).resolve().parents[2] / "share/aisktagos/mind-icons"
+
+# Единый стиль Mind: фиолетово-синий градиент (как в MindKit tokens.json)
+GRADIENT = ("#a46cf0", "#7c66df", "#5b8dee", "#49b3f7")
+GRAD_CSS = ", ".join(f"stop:{i / 3:.2f} {c}" for i, c in enumerate(GRADIENT))
+CYAN = "#5b8dee"   # акцент (имя оставлено ради совместимости)
+VIOLET = "#a46cf0"
 STATUS_COLORS = {"ok": "#2fd27a", "warn": "#febc2e", "info": CYAN, "off": "#7d87ab"}
+
+
+def _reduced_motion() -> bool:
+    """Аналог prefers-reduced-motion: в KDE анимации выключаются AnimationDurationFactor=0."""
+    try:
+        for line in (Path.home() / ".config/kdeglobals").read_text().splitlines():
+            if line.startswith("AnimationDurationFactor="):
+                return float(line.split("=", 1)[1]) == 0
+    except (OSError, ValueError):
+        pass
+    return os.environ.get("AISKTAG_REDUCED_MOTION") == "1"
+
+
+REDUCED_MOTION = _reduced_motion()
 
 STYLE = f"""
 QWidget {{ font-family: Inter; font-size: 10.5pt; color: #e6ecff; }}
-QWidget#root {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0a0f1e, stop:1 #0d1430); }}
+QWidget#root {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #0b0a1c, stop:1 #0d1232); }}
 QStackedWidget, QScrollArea, QScrollArea > QWidget > QWidget {{ background: transparent; }}
 
-QListWidget#nav {{ background: rgba(14, 20, 38, 0.92); border: none;
-    border-right: 1px solid rgba(120, 200, 255, 0.12); padding: 14px 10px; outline: none; }}
-QListWidget#nav::item {{ padding: 11px 12px; border-radius: 10px; margin: 3px 0; color: #aeb8da; }}
-QListWidget#nav::item:hover {{ background: rgba(34, 228, 255, 0.07); color: #ffffff; }}
-QListWidget#nav::item:selected {{ color: #ffffff; border: 1px solid rgba(34, 228, 255, 0.55);
+QListWidget#nav {{ background: rgba(16, 15, 38, 0.92); border: none;
+    border-right: 1px solid rgba(164, 108, 240, 0.16); padding: 14px 10px; outline: none; }}
+QListWidget#nav::item {{ padding: 11px 12px; border-radius: 10px; margin: 3px 0; color: #b4b2da; }}
+QListWidget#nav::item:hover {{ background: rgba(164, 108, 240, 0.10); color: #ffffff; }}
+QListWidget#nav::item:selected {{ color: #ffffff; border: 1px solid rgba(164, 108, 240, 0.55);
+    border-top: 1px solid rgba(255, 255, 255, 0.22);
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
-                                stop:0 rgba(31, 184, 255, 0.35), stop:1 rgba(61, 107, 255, 0.30)); }}
+                                stop:0 rgba(164, 108, 240, 0.42), stop:1 rgba(73, 179, 247, 0.26)); }}
 
-QLabel#h1 {{ font-size: 22pt; font-weight: 600; color: #ffffff; }}
+QLabel#h1 {{ font-size: 22pt; font-weight: 700;
+    color: #a46cf0; }}
 QLabel#h2 {{ font-size: 13.5pt; font-weight: 600; color: #ffffff; }}
-QLabel#muted {{ color: #8b95b8; }}
+QLabel#muted {{ color: #9693bd; }}
 
-QFrame#card {{ background: rgba(18, 26, 46, 0.85); border: 1px solid rgba(120, 200, 255, 0.14);
+QFrame#card {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(30, 28, 64, 0.92),
+                                         stop:1 rgba(18, 18, 44, 0.92));
+    border: 1px solid rgba(164, 108, 240, 0.18); border-top: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 16px; }}
 
-QPushButton {{ background: #16203a; border: 1px solid rgba(120, 200, 255, 0.22); border-radius: 10px;
-    padding: 8px 16px; }}
-QPushButton:hover {{ border: 1px solid {CYAN}; }}
-QPushButton:disabled {{ color: #5b6585; border: 1px solid rgba(120, 200, 255, 0.10); }}
+QPushButton {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #24224a, stop:1 #191838);
+    border: 1px solid rgba(164, 108, 240, 0.28); border-top: 1px solid rgba(255, 255, 255, 0.16);
+    border-bottom: 2px solid rgba(8, 6, 30, 0.7); border-radius: 10px; padding: 8px 16px; }}
+QPushButton:hover {{ border: 1px solid {VIOLET}; border-bottom: 2px solid rgba(8, 6, 30, 0.7); }}
+QPushButton:pressed {{ border-top: 2px solid rgba(8, 6, 30, 0.7); border-bottom: 1px solid rgba(255, 255, 255, 0.12); }}
+QPushButton:disabled {{ color: #5f5c85; border: 1px solid rgba(164, 108, 240, 0.10); }}
 QPushButton#tile {{ text-align: left; padding: 14px 16px; border-radius: 14px;
-    background: rgba(18, 26, 46, 0.85); border: 1px solid rgba(120, 200, 255, 0.14); }}
-QPushButton#tile:hover {{ border: 1px solid {CYAN}; background: rgba(34, 228, 255, 0.07); }}
-QPushButton#tile:pressed {{ background: rgba(61, 123, 255, 0.18); }}
-QPushButton#primary {{ color: #ffffff; font-weight: 600; border: 1px solid rgba(34, 228, 255, 0.5);
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1fb8ff, stop:1 #3d6bff); }}
-QPushButton#primary:hover {{ border: 1px solid {CYAN};
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #4fd0ff, stop:1 #5a85ff); }}
-QPushButton#primary:disabled {{ background: #1c2540; color: #5b6585; border: 1px solid transparent; }}
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(32, 30, 68, 0.92), stop:1 rgba(20, 19, 46, 0.92));
+    border: 1px solid rgba(164, 108, 240, 0.18); border-top: 1px solid rgba(255, 255, 255, 0.14);
+    border-bottom: 2px solid rgba(8, 6, 30, 0.75); }}
+QPushButton#tile:hover {{ border: 1px solid {VIOLET}; border-bottom: 2px solid rgba(8, 6, 30, 0.75);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(164, 108, 240, 0.20), stop:1 rgba(73, 179, 247, 0.12)); }}
+QPushButton#tile:pressed {{ background: rgba(124, 102, 223, 0.26); }}
+QPushButton#primary {{ color: #ffffff; font-weight: 600; border: 0; border-radius: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.38); border-bottom: 2px solid rgba(20, 10, 60, 0.55);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, {GRAD_CSS}); }}
+QPushButton#primary:hover {{ background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+    stop:0 #b483f5, stop:0.5 #6f9cf3, stop:1 #5cc4ff); }}
+QPushButton#primary:disabled {{ background: #1e1c3a; color: #5f5c85; border: 0; }}
 
-QCheckBox#stack {{ padding: 12px 14px; border-radius: 12px; background: rgba(18, 26, 46, 0.85);
-    border: 1px solid rgba(120, 200, 255, 0.14); spacing: 12px; }}
-QCheckBox#stack:hover {{ border: 1px solid rgba(34, 228, 255, 0.6); }}
-QCheckBox#stack:checked {{ border: 1px solid {CYAN}; background: rgba(61, 123, 255, 0.16); }}
+QCheckBox#stack {{ padding: 12px 14px; border-radius: 12px;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 rgba(30, 28, 64, 0.92), stop:1 rgba(18, 18, 44, 0.92));
+    border: 1px solid rgba(164, 108, 240, 0.18); border-top: 1px solid rgba(255, 255, 255, 0.12); spacing: 12px; }}
+QCheckBox#stack:hover {{ border: 1px solid rgba(164, 108, 240, 0.7); }}
+QCheckBox#stack:checked {{ border: 1px solid {VIOLET};
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 rgba(164, 108, 240, 0.24), stop:1 rgba(73, 179, 247, 0.14)); }}
 QCheckBox::indicator {{ width: 18px; height: 18px; border-radius: 5px;
-    border: 1px solid rgba(120, 200, 255, 0.4); background: #121a2e; }}
-QCheckBox::indicator:checked {{ border: 1px solid {CYAN};
-    background: qradialgradient(cx:0.5, cy:0.5, radius:0.6, fx:0.5, fy:0.5,
-                                stop:0 {CYAN}, stop:0.62 {CYAN}, stop:0.7 #121a2e); }}
+    border: 1px solid rgba(164, 108, 240, 0.45); background: #141330; }}
+QCheckBox::indicator:checked {{ border: 1px solid rgba(255, 255, 255, 0.35);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, {GRAD_CSS}); }}
 
 QPlainTextEdit {{ font-family: 'JetBrains Mono'; font-size: 9pt; border-radius: 12px; padding: 8px;
-    background: #070b16; border: 1px solid rgba(120, 200, 255, 0.14); color: #b9f3ff; }}
+    background: #08071a; border: 1px solid rgba(164, 108, 240, 0.18); color: #cfc4ff; }}
 QScrollBar:vertical {{ background: transparent; width: 10px; }}
-QScrollBar::handle:vertical {{ background: rgba(139, 149, 184, 0.35); border-radius: 5px; min-height: 30px; }}
-QScrollBar::handle:vertical:hover {{ background: rgba(34, 228, 255, 0.6); }}
+QScrollBar::handle:vertical {{ background: rgba(150, 147, 189, 0.35); border-radius: 5px; min-height: 30px; }}
+QScrollBar::handle:vertical:hover {{ background: qlineargradient(x1:0, y1:0, x2:0, y2:1, {GRAD_CSS}); }}
 QScrollBar::add-line, QScrollBar::sub-line {{ height: 0; width: 0; }}
 """
 
@@ -158,9 +197,86 @@ def gpu_status(name: str) -> tuple[str, str]:
     return "info", "Используется стандартный драйвер ядра"
 
 
+def mind_icon(name: str, theme_fallback: str = "", size: int = 48, white: bool = False) -> QIcon:
+    """Иконка Mind с фиолетово-синим градиентом (без эмодзи и чужих значков).
+
+    white=True — белый вариант для кнопок, у которых фон уже градиентный."""
+    own = MIND_ICONS / f"{name}.svg"
+    svg = None
+    if white and qtfx is not None:
+        try:
+            svg = qtfx.design.icon_svg(name, size, gradient=False, color="#ffffff").encode()
+        except KeyError:
+            svg = None
+    elif own.exists():
+        svg = own.read_bytes()
+    if svg is not None:
+        renderer = QSvgRenderer(QByteArray(svg))
+        pm = QPixmap(size, size)
+        pm.fill(Qt.GlobalColor.transparent)
+        p = QPainter(pm)
+        renderer.render(p)
+        p.end()
+        return QIcon(pm)
+    if qtfx is not None:
+        try:
+            return qtfx.icon(name, size)
+        except (KeyError, ImportError):
+            pass
+    return QIcon.fromTheme(theme_fallback or name)
+
+
+def depth(widget: QWidget, blur: int = 28, dy: int = 8, alpha: int = 110) -> None:
+    """3D-глубина: мягкая фиолетовая тень под карточкой/кнопкой."""
+    shadow = QGraphicsDropShadowEffect(widget)
+    shadow.setBlurRadius(blur)
+    shadow.setOffset(0, dy)
+    shadow.setColor(QColor(40, 20, 110, alpha))
+    widget.setGraphicsEffect(shadow)
+
+
+def springy(widget: QWidget) -> QWidget:
+    """Пружина при наведении и нажатии (bounce из MindKit)."""
+    if qtfx is not None and not REDUCED_MOTION:
+        qtfx.bounce_on_hover(widget)
+    widget.setCursor(Qt.CursorShape.PointingHandCursor)
+    return widget
+
+
+def primary(text: str) -> QPushButton:
+    """Главная кнопка: объёмная, с переливающимся градиентом Mind и пружиной."""
+    b = QPushButton(text, objectName="primary")
+    springy(b)
+    # Без QGraphicsDropShadowEffect: кнопка часто лежит в карточке с тенью, а вложенные эффекты Qt
+    # рисует с ошибками. Объём дают светлая кромка сверху и тёмная снизу.
+    if qtfx is not None and not REDUCED_MOTION:
+        # qtfx.shimmer задаёт фон самого виджета: выключенная кнопка остаётся серой
+        extra = ("color: #ffffff; font-weight: 600; border: 0; border-radius: 10px; padding: 8px 18px;"
+                 "border-top: 1px solid rgba(255,255,255,0.38); border-bottom: 2px solid rgba(20,10,60,0.55);")
+
+        def sync(b=b):
+            anim = getattr(b, "_mt_shimmer", None)
+            if b.isEnabled() and anim is None:
+                qtfx.shimmer(b, extra=extra)
+            elif not b.isEnabled() and anim is not None:
+                anim.stop()
+                b._mt_shimmer = None
+                b.setStyleSheet("")
+        b._mt_sync = sync
+        orig = b.setEnabled
+
+        def set_enabled(on: bool, b=b, orig=orig):
+            orig(on)
+            b._mt_sync()
+        b.setEnabled = set_enabled
+        sync()
+    return b
+
+
 def card() -> tuple[QFrame, QVBoxLayout]:
-    """Карточка со скруглением и тонкой светящейся рамкой."""
+    """Карточка с глубиной: светлая кромка сверху и мягкая тень."""
     frame = QFrame(objectName="card")
+    depth(frame)
     lay = QVBoxLayout(frame)
     lay.setContentsMargins(18, 16, 18, 16)
     lay.setSpacing(10)
@@ -212,7 +328,7 @@ class Runner(QWidget):
             return
         title, who, cmd = self.queue.pop(0)
         self.status.setText(f"Выполняется: {title}…")
-        self.log.appendPlainText(f"\n▶ {title}\n$ {cmd}")
+        self.log.appendPlainText(f"\n» {title}\n$ {cmd}")
         self.proc = QProcess(self)
         self.proc.setProcessChannelMode(QProcess.ProcessChannelMode.MergedChannels)
         self.proc.readyReadStandardOutput.connect(self._read)
@@ -229,14 +345,63 @@ class Runner(QWidget):
         self.log.ensureCursorVisible()
 
     def _done(self, title: str, code: int) -> None:
-        mark = "✔" if code == 0 else f"✘ (код {code})"
+        mark = "[готово]" if code == 0 else f"[ошибка, код {code}]"
         self.log.appendPlainText(f"{mark} {title}")
         self.proc = None
         self._next()
 
 
+class GradientHeading(QLabel):
+    """Заголовок с переливающимся фиолетово-синим градиентом (как .mt-gradient-text в вебе).
+
+    QSS-градиент в color Qt растягивает на каждый глиф, поэтому текст рисуем сами."""
+
+    def __init__(self, text: str):
+        super().__init__(text)
+        self._shift = 0.0
+        self._anim = None
+        if not REDUCED_MOTION:
+            self._anim = QVariantAnimation(self)
+            self._anim.setStartValue(0.0)
+            self._anim.setKeyValueAt(0.5, 1.0)
+            self._anim.setEndValue(0.0)
+            self._anim.setDuration(6000)   # тот же период 6 с, что и в mind-ui.css
+            self._anim.setLoopCount(-1)
+            self._anim.valueChanged.connect(self._tick)
+
+    def _tick(self, v) -> None:
+        self._shift = float(v)
+        self.update()
+
+    def showEvent(self, e):  # noqa: N802 — имя из Qt
+        if self._anim is not None:
+            self._anim.start()
+        super().showEvent(e)
+
+    def hideEvent(self, e):  # noqa: N802
+        if self._anim is not None:
+            self._anim.stop()
+        super().hideEvent(e)
+
+    def paintEvent(self, _e):  # noqa: N802
+        r = self.contentsRect()
+        span = max(1, min(self.fontMetrics().horizontalAdvance(self.text()), r.width()))
+        off = self._shift * span * 0.6
+        g = QLinearGradient(r.left() - off, 0, r.left() - off + span * 1.2, 0)
+        g.setSpread(QLinearGradient.Spread.ReflectSpread)
+        for pos, col in ((0.0, "#c9a4ff"), (0.3, GRADIENT[0]), (0.55, GRADIENT[1]),
+                         (0.8, GRADIENT[2]), (1.0, GRADIENT[3])):
+            g.setColorAt(pos, QColor(col))
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        p.setPen(QPen(QBrush(g), 1))
+        p.setFont(self.font())
+        p.drawText(r, int(self.alignment() | Qt.TextFlag.TextWordWrap), self.text())
+        p.end()
+
+
 def heading(text: str, obj: str = "h1") -> QLabel:
-    lbl = QLabel(text)
+    lbl = GradientHeading(text) if obj == "h1" else QLabel(text)
     lbl.setObjectName(obj)
     lbl.setWordWrap(True)
     return lbl
@@ -253,10 +418,12 @@ def muted(text: str) -> QLabel:
 def tile(title: str, subtitle: str, icon: str, action) -> QPushButton:
     b = QPushButton(f"{title}\n{subtitle}")
     b.setObjectName("tile")
-    b.setIcon(QIcon.fromTheme(icon))
-    b.setIconSize(QSize(32, 32))
+    name, _, fallback = icon.partition(":")
+    b.setIcon(mind_icon(name, fallback))
+    b.setIconSize(QSize(30, 30))
     b.setMinimumHeight(68)
     b.clicked.connect(action)
+    springy(b)
     return b
 
 
@@ -281,18 +448,18 @@ class WelcomePage(QWidget):
         tiles = []
         if LIVE:
             tiles.append(("Установить AIsktagOS", "Простой мастер установки на диск",
-                          "aisktagos-install", lambda: launch("aisktag-install")))
+                          "download:aisktagos-install", lambda: launch("aisktag-install")))
         tiles += [
-            ("Центр приложений", "Программы из Ubuntu и Flathub", "plasmadiscover",
+            ("Центр приложений", "Программы из Ubuntu и Flathub", "store:plasmadiscover",
              lambda: launch("plasma-discover")),
-            ("Обновить систему", "Обновления и новые версии программ", "system-software-update",
+            ("Обновить систему", "Обновления и новые версии программ", "refresh:system-software-update",
              lambda: launch("plasma-discover", "--mode", "update")),
-            ("Снимки системы", "Откат к рабочему состоянию (Timeshift)", "timeshift",
+            ("Снимки системы", "Откат к рабочему состоянию (Timeshift)", "history:timeshift",
              lambda: launch("timeshift-launcher")),
-            ("Настройки", "Экран, звук, сеть, оформление", "preferences-system",
+            ("Настройки", "Экран, звук, сеть, оформление", "settings:preferences-system",
              lambda: launch("systemsettings")),
-            ("Терминал", "kitty + zsh с подсказками", "kitty", lambda: launch("kitty")),
-            ("VS Code", "Редактор кода", "vscode",
+            ("Терминал", "kitty + zsh с подсказками", "terminal:kitty", lambda: launch("kitty")),
+            ("VS Code", "Редактор кода", "code:vscode",
              lambda: launch("code")),
         ]
         for i, (t, s, ic, fn) in enumerate(tiles):
@@ -373,13 +540,16 @@ class DriversPage(QWidget):
         self.b_check = QPushButton("Проверить доступные драйверы")
         self.b_check.clicked.connect(lambda: runner.run(
             "Поиск драйверов", "user", "ubuntu-drivers devices 2>/dev/null || echo 'Дополнительные драйверы не требуются'"))
-        self.b_install = QPushButton("Установить рекомендуемые", objectName="primary")
+        self.b_install = primary("Установить рекомендуемые")
+        self.b_install.setIcon(mind_icon("download", white=True))
         self.b_install.clicked.connect(self._install)
         self.b_fw = QPushButton("Обновить прошивки устройств")
         self.b_fw.clicked.connect(lambda: runner.run(
             "Обновление прошивок", "root", "fwupdmgr refresh --force; fwupdmgr update -y --no-reboot-check"))
+        self.b_check.setIcon(mind_icon("search"))
+        self.b_fw.setIcon(mind_icon("refresh"))
         for b in (self.b_check, self.b_install, self.b_fw):
-            row.addWidget(b)
+            row.addWidget(springy(b))
         row.addStretch(1)
         self.b_install.setEnabled(not LIVE)
         self.b_fw.setEnabled(not LIVE)
@@ -412,6 +582,9 @@ class DevPage(QWidget):
             name, desc, _who, _cmd = item
             cb = QCheckBox(f"{name}\n{desc}", objectName="stack")
             cb.setCursor(Qt.CursorShape.PointingHandCursor)
+            # Длинное описание не должно выталкивать правую колонку за край окна
+            cb.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            cb.setToolTip(f"{name}: {desc}")
             col.addWidget(cb, i // 2, i % 2)
             self.checks.append((cb, item))
         col.setRowStretch(len(DEV_STACKS) // 2 + 1, 1)
@@ -423,7 +596,7 @@ class DevPage(QWidget):
 
         row = QHBoxLayout()
         row.addStretch(1)
-        self.b_go = QPushButton("Установить выбранное", objectName="primary")
+        self.b_go = primary("Установить выбранное")
         self.b_go.clicked.connect(self._go)
         row.addWidget(self.b_go)
         lay.addLayout(row)
@@ -468,7 +641,7 @@ class EcosystemPage(QWidget):
         self.link_state = muted("")
         cl.addWidget(self.link_state)
         row = QHBoxLayout()
-        self.b_init = QPushButton("Создать аккаунт", objectName="primary")
+        self.b_init = primary("Создать аккаунт")
         self.b_init.clicked.connect(self._init)
         self.b_join = QPushButton("Войти по ключу")
         self.b_join.clicked.connect(self._join)
@@ -476,8 +649,11 @@ class EcosystemPage(QWidget):
         b_scan.clicked.connect(self._scan)
         b_drop = QPushButton("MindDrop: отправить файл…")
         b_drop.clicked.connect(self._drop)
+        self.b_join.setIcon(mind_icon("key"))
+        b_scan.setIcon(mind_icon("devices"))
+        b_drop.setIcon(mind_icon("upload"))
         for b in (self.b_init, self.b_join, b_scan, b_drop):
-            row.addWidget(b)
+            row.addWidget(springy(b))
         row.addStretch(1)
         cl.addLayout(row)
         lay.addWidget(c)
@@ -487,16 +663,18 @@ class EcosystemPage(QWidget):
         cl.addWidget(heading("Связка ключей Mind", "h2"))
         cl.addWidget(muted("Ключи API хранятся в KWallet и доступны Mind IDE, шлюзу AI Duo, ITIS Browser "
                            "и остальным программам экосистемы. Ввести ключ нужно один раз."))
-        self.keys = QLabel()
-        self.keys.setTextFormat(Qt.TextFormat.RichText)
-        cl.addWidget(self.keys)
+        self.keys = QVBoxLayout()
+        self.keys.setSpacing(6)
+        cl.addLayout(self.keys)
         row = QHBoxLayout()
         b_add = QPushButton("Добавить ключ")
         b_add.clicked.connect(self._add_key)
         b_imp = QPushButton("Импорт из .env…")
         b_imp.clicked.connect(self._import_env)
-        row.addWidget(b_add)
-        row.addWidget(b_imp)
+        b_add.setIcon(mind_icon("plus"))
+        b_imp.setIcon(mind_icon("file"))
+        row.addWidget(springy(b_add))
+        row.addWidget(springy(b_imp))
         row.addStretch(1)
         cl.addLayout(row)
         lay.addWidget(c)
@@ -512,9 +690,10 @@ class EcosystemPage(QWidget):
             apps = []
             cl.addWidget(muted(str(e)))
         for i, app in enumerate(a for a in apps if a["installable"]):
-            text = ("✓ " if app["installed"] else "") + app["name"]
+            text = app["name"] + (" · установлено" if app["installed"] else "")
             tagline = app["tagline"] if len(app["tagline"]) <= 40 else app["tagline"][:39].rstrip() + "…"
-            b = tile(text, tagline, "system-software-install", lambda _=False, a=app: self._store(a))
+            b = tile(text, tagline, "play:media-playback-start" if app["installed"] else "download:system-software-install",
+                     lambda _=False, a=app: self._store(a))
             # Длинный текст плитки не должен раздвигать страницу шире окна
             b.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Fixed)
             grid.addWidget(b, i // 2, i % 2)
@@ -541,7 +720,22 @@ class EcosystemPage(QWidget):
         self.b_init.setText("Показать ключ" if has else "Создать аккаунт")
         self.b_join.setVisible(not has)
         names = [n for n in mk_keychain.names() if n != mk_link.ACCOUNT_KEY_NAME]
-        self.keys.setText("<br>".join(f"🔑 {n}" for n in names) if names else "Ключей пока нет.")
+        while self.keys.count():
+            w = self.keys.takeAt(0).widget()
+            if w is not None:
+                w.deleteLater()
+        key_pm = mind_icon("key").pixmap(18, 18)
+        for n in names or [None]:
+            row = QWidget()
+            rl = QHBoxLayout(row)
+            rl.setContentsMargins(0, 0, 0, 0)
+            rl.setSpacing(8)
+            if n is not None:
+                ic = QLabel()
+                ic.setPixmap(key_pm)
+                rl.addWidget(ic)
+            rl.addWidget(QLabel(n if n is not None else "Ключей пока нет."), 1)
+            self.keys.addWidget(row)
 
     def _init(self) -> None:
         key = mk_link.init_account()
@@ -581,7 +775,7 @@ class EcosystemPage(QWidget):
         except mk_link.LinkError as e:
             QMessageBox.warning(self, "MindDrop", str(e))
             return
-        lines = [f"{'✓' if v == 'ok' else '✗'} {k}" + ("" if v == "ok" else f": {v}") for k, v in res.items()]
+        lines = [f"{k}: " + ("доставлено" if v == "ok" else f"не доставлено ({v})") for k, v in res.items()]
         QMessageBox.information(self, "MindDrop", "\n".join(lines) or "Нет известных устройств")
 
     def _add_key(self) -> None:
@@ -614,6 +808,7 @@ class SystemPage(QWidget):
         lay = QVBoxLayout(self)
         lay.addWidget(heading("О системе"))
         info = QFrame(objectName="card")
+        depth(info)
         grid = QGridLayout(info)
         grid.setContentsMargins(18, 16, 18, 16)
         grid.setHorizontalSpacing(24)
@@ -638,12 +833,13 @@ class SystemPage(QWidget):
         grid.setColumnStretch(1, 1)
         lay.addWidget(info)
         row = QHBoxLayout()
-        for text, argv in (("Системный монитор", ("plasma-systemmonitor",)),
-                           ("Информация о системе", ("kinfocenter",)),
-                           ("Разделы дисков", ("partitionmanager",))):
+        for text, icon, argv in (("Системный монитор", "chart", ("plasma-systemmonitor",)),
+                                 ("Информация о системе", "info", ("kinfocenter",)),
+                                 ("Разделы дисков", "layers", ("partitionmanager",))):
             b = QPushButton(text)
+            b.setIcon(mind_icon(icon))
             b.clicked.connect(lambda _=False, a=argv: launch(*a))
-            row.addWidget(b)
+            row.addWidget(springy(b))
         row.addStretch(1)
         lay.addLayout(row)
         lay.addStretch(1)
@@ -696,25 +892,25 @@ class Center(QWidget):
 
         self.runner = Runner()
         nav = QListWidget(objectName="nav")
-        nav.setFixedWidth(210)
+        nav.setFixedWidth(224)
+        nav.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         nav.setIconSize(QSize(22, 22))
-        for text, icon in (("Добро пожаловать", "aisktagos-logo"), ("Драйверы", "video-display"),
-                           ("Разработка", "applications-development"), ("Экосистема", "network-workgroup"),
-                           ("Система", "computer")):
-            nav.addItem(QListWidgetItem(QIcon.fromTheme(icon), text))
+        for text, icon in (("Добро пожаловать", "home"), ("Драйверы", "gpu"),
+                           ("Разработка", "code"), ("Экосистема", "devices"),
+                           ("Система", "cpu")):
+            nav.addItem(QListWidgetItem(mind_icon(icon), text))
         self.stack = QStackedWidget()
         for w in (WelcomePage(), DriversPage(self.runner), DevPage(self.runner), EcosystemPage(self.runner),
                   SystemPage()):
             self.stack.addWidget(w)
-        # Плавное появление страницы при переключении
-        self.fade = QGraphicsOpacityEffect(self.stack)
-        self.fade.setOpacity(1.0)
-        self.stack.setGraphicsEffect(self.fade)
-        self.anim = QPropertyAnimation(self.fade, b"opacity", self)
-        self.anim.setDuration(240)
-        self.anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-        # После анимации эффект выключаем: иначе страница всё время рисуется через буфер
-        self.anim.finished.connect(lambda: self.fade.setEnabled(False))
+        # Появление страницы при переключении: пружинистый подъём снизу (bounce-in).
+        # Прозрачность не анимируем: QGraphicsOpacityEffect на стеке конфликтует с тенями карточек.
+        self.anim_rise = QPropertyAnimation(self.stack, b"pos", self)
+        self.anim_rise.setDuration(520)
+        # Пружина как cubic-bezier(0.34, 1.56, 0.64, 1) в вебе
+        spring = QEasingCurve(QEasingCurve.Type.OutBack)
+        spring.setOvershoot(1.9)
+        self.anim_rise.setEasingCurve(spring)
         nav.currentRowChanged.connect(self._switch)
 
         right = QVBoxLayout()
@@ -730,11 +926,15 @@ class Center(QWidget):
 
     def _switch(self, index: int) -> None:
         self.stack.setCurrentIndex(index)
-        self.anim.stop()
-        self.fade.setEnabled(True)
-        self.anim.setStartValue(0.0)
-        self.anim.setEndValue(1.0)
-        self.anim.start()
+        if REDUCED_MOTION:
+            return
+        self.anim_rise.stop()
+        # Позицию берём из раскладки: до первого показа окна она ещё не рассчитана
+        end = self.stack.geometry().topLeft()
+        if self.isVisible() and not end.isNull():
+            self.anim_rise.setStartValue(end + QPoint(0, 22))
+            self.anim_rise.setEndValue(end)
+            self.anim_rise.start()
 
 
 def main() -> int:
