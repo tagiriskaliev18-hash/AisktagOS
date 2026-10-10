@@ -116,7 +116,7 @@ def panel_svg(opacity: float) -> str:
     size = 2 * R + MID
     sdefs, sh = shadow(0, size + 10)
     body = "\n".join([
-        frame("", "#0e1322", opacity, "#8fd8ff", 0.20, 0.10, 0, 0),
+        frame("", "#0e1322", opacity, "#b3a8ff", 0.20, 0.10, 0, 0),
         # Маска размытия: сплошной силуэт, иначе полупрозрачный фон даёт «дырявый» blur
         frame("mask", "#000000", 1.0, "#000000", 0.0, 0.0, size + 10, 0),
         sh,
@@ -130,14 +130,14 @@ def panel_svg(opacity: float) -> str:
 LINE_SVG = """<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40">
 <defs>
 <linearGradient id="v" x1="0" y1="0" x2="0" y2="1">
-<stop offset="0" stop-color="#8fd8ff" stop-opacity="0"/>
-<stop offset="0.5" stop-color="#8fd8ff" stop-opacity="0.45"/>
-<stop offset="1" stop-color="#8fd8ff" stop-opacity="0"/>
+<stop offset="0" stop-color="#b3a8ff" stop-opacity="0"/>
+<stop offset="0.5" stop-color="#b3a8ff" stop-opacity="0.45"/>
+<stop offset="1" stop-color="#b3a8ff" stop-opacity="0"/>
 </linearGradient>
 <linearGradient id="h" x1="0" y1="0" x2="1" y2="0">
-<stop offset="0" stop-color="#8fd8ff" stop-opacity="0"/>
-<stop offset="0.5" stop-color="#8fd8ff" stop-opacity="0.45"/>
-<stop offset="1" stop-color="#8fd8ff" stop-opacity="0"/>
+<stop offset="0" stop-color="#b3a8ff" stop-opacity="0"/>
+<stop offset="0.5" stop-color="#b3a8ff" stop-opacity="0.45"/>
+<stop offset="1" stop-color="#b3a8ff" stop-opacity="0"/>
 </linearGradient>
 </defs>
 <rect id="vertical-line" x="2" y="0" width="1" height="40" fill="url(#v)"/>
